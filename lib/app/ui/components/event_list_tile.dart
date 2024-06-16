@@ -53,65 +53,62 @@ class TemplateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // String placeholderAvatar = createPlaceholderAvatar(organizer);
     // const bool kIsWeb = bool.fromEnvironment('dart.library.js_util');
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    eventDate,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 14.0,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  // Text(
-                  //   htm,
-                  //   style: TextStyle(
-                  //     color: Theme.of(context).colorScheme.primary,
-                  //     fontSize: 14.0,
-                  //     fontWeight: FontWeight.w500,
-                  //   ),
-                  // ),
-                ],
-              ),
               Text(
-                eventName,
+                eventDate,
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 22.0,
-                  fontWeight: FontWeight.w400,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 14.0,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 8.0),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: AutoSizeText(
-                      location,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 16.0,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      maxLines: 2,
-                      textAlign: TextAlign.end,
-                    ),
+              // Text(
+              //   htm,
+              //   style: TextStyle(
+              //     color: Theme.of(context).colorScheme.primary,
+              //     fontSize: 14.0,
+              //     fontWeight: FontWeight.w500,
+              //   ),
+              // ),
+            ],
+          ),
+          Text(
+            eventName,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontSize: 22.0,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 8.0),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Expanded(
+                child: AutoSizeText(
+                  location,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 16.0,
+                    fontWeight: FontWeight.w400,
                   ),
-                ],
+                  maxLines: 2,
+                  textAlign: TextAlign.end,
+                ),
               ),
             ],
           ),
-        )
-      ],
+        ],
+      ),
     );
   }
 }
