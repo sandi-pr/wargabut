@@ -1,29 +1,44 @@
-import 'dart:io';
 
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:wargabut/app/ui/screens/detail/event_detail.dart';
 
 class ListTileEvent extends StatelessWidget {
   final String eventName;
   final String eventDate;
   final String location;
+  final String desc;
   const ListTileEvent({
     super.key,
     required this.eventName,
     required this.eventDate,
     required this.location,
+    required this.desc,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card.outlined(
-      child: TemplateCard(
-        eventName: eventName,
-        eventDate: eventDate,
-        location: location,
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EventDetailPage(
+                eventName: eventName,
+                eventDate: eventDate,
+                location: location,
+                desc: desc,
+              ),
+            ),
+          );
+        },
+        child: TemplateCard(
+          eventName: eventName,
+          eventDate: eventDate,
+          location: location,
+        ),
       ),
     );
   }
@@ -82,12 +97,13 @@ class TemplateCard extends StatelessWidget {
             ],
           ),
           Text(
-            eventName,
+            eventName.replaceAll('\\n', '\n'),
             style: TextStyle(
               color: Theme.of(context).colorScheme.primary,
               fontSize: 22.0,
               fontWeight: FontWeight.w400,
             ),
+            softWrap: true,
           ),
           const SizedBox(height: 8.0),
           Row(
