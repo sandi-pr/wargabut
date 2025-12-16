@@ -1,6 +1,6 @@
 # wargabut
 
-A new Flutter project.
+Media Rekomendasi Hobi - Event Jejepangan.
 
 ## Getting Started
 

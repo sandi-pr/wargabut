@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:maps_launcher/maps_launcher.dart';
 import 'package:wargabut/app/ui/components/impacnation/photo_view.dart';
 
 class PostDetailPage extends StatelessWidget {
@@ -109,15 +108,15 @@ class PostDetailPage extends StatelessWidget {
                             data['address'],
                             softWrap: true,
                           ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton(
-                                onPressed: () => MapsLauncher.launchQuery(data['location']),
-                                child: const Text('Lihat arah'),
-                              ),
-                            ],
-                          )
+                          // Row(
+                          //   mainAxisAlignment: MainAxisAlignment.end,
+                          //   children: [
+                          //     TextButton(
+                          //       onPressed: () => MapsLauncher.launchQuery(data['location']),
+                          //       child: const Text('Lihat arah'),
+                          //     ),
+                          //   ],
+                          // )
                         ],
                       ),
                     ),

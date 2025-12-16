@@ -1,1 +1,39 @@
-{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"]},"flutter":{"platforms":{"android":{"default":{"projectId":"wargabut-11","appId":"1:825512861147:android:5402a73d4b8ed41823dbfe","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"wargabut-11","configurations":{"android":"1:825512861147:android:5402a73d4b8ed41823dbfe","ios":"1:825512861147:ios:fcd51bce16b3f4a423dbfe","web":"1:825512861147:web:9336f0b37e49c9c123dbfe"}}}}}}
+{
+  "hosting": {
+    "public": "build/web",
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "wargabut-11",
+          "appId": "1:825512861147:android:5402a73d4b8ed41823dbfe",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "wargabut-11",
+          "configurations": {
+            "android": "1:825512861147:android:5402a73d4b8ed41823dbfe",
+            "ios": "1:825512861147:ios:fcd51bce16b3f4a423dbfe",
+            "web": "1:825512861147:web:9336f0b37e49c9c123dbfe"
+          }
+        }
+      }
+    }
+  }
+}

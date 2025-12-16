@@ -14,11 +14,12 @@
     This is a placeholder for base href that will be replaced by the value of
     the `--base-href` argument provided to `flutter build`.
   -->
-  <base href="$FLUTTER_BASE_HREF">
+<!--  <base href="$FLUTTER_BASE_HREF">-->
+  <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Platform terbaik untuk menemukan rekomendasi event dan hobi terbaru di Indonesia." />
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,33 +28,23 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/x-icon" href="favicon.ico"/>
 
-  <title>wargabut</title>
+  <title>Wargabut - Media Rekomendasi Hobi</title>
   <link rel="manifest" href="manifest.json">
 
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KQMQ2FE7YE"></script>
   <script>
-    // The value below is injected by flutter build, do not touch.
-    const serviceWorkerVersion = null;
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-KQMQ2FE7YE');
   </script>
-  <!-- This script adds the flutter initialization JS code -->
-  <script src="flutter.js" defer></script>
 </head>
 <body>
-  <script>
-    window.addEventListener('load', function(ev) {
-      // Download main.dart.js
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
-        onEntrypointLoaded: function(engineInitializer) {
-          engineInitializer.initializeEngine().then(function(appRunner) {
-            appRunner.runApp();
-          });
-        }
-      });
-    });
-  </script>
+  <script src="web_geolocation_helper.js"></script>
+  <script src="flutter_bootstrap.js" async></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCdAdBDmGPawerj-jc57RtGLm3_pFxQZCo"></script>
 </body>
 </html>

@@ -77,7 +77,7 @@ class _PosterListState extends State<PosterList> {
                 ),
               ),
               ListTile(
-                title: const Text('List Event'),
+                title: const Text('J-EventKu'),
                 selected: _selectedIndex == 0,
                 onTap: () {
                   // Update the state of the app
