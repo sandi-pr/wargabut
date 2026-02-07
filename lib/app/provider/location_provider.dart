@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../services/web_geolocation_service.dart';
+import '../services/geolocation_gate.dart';
 
 class LocationProvider extends ChangeNotifier {
   bool _isFetching = false;
@@ -16,13 +16,14 @@ class LocationProvider extends ChangeNotifier {
   String? get error => _error;
 
   // ===== Actions =====
-  Future<void> fetchUserLocationWeb() async {
+  Future<void> fetchUserLocationWeb() async { // Nama fungsi tetap, tapi isinya dinamis
     _isFetching = true;
     _error = null;
     notifyListeners();
 
     try {
-      final pos = await WebGeolocationService.getUserLocation();
+      // Sekarang memanggil fungsi hasil conditional import
+      final pos = await getUserLocationPlatform();
 
       _userPosition = Position(
         latitude: pos.lat,

@@ -24,14 +24,14 @@ class StorageService {
     return formattedName;
   }
 
-  Future<String?> uploadImage(XFile? imageFile, String eventName) async {
+  Future<String?> uploadImage(XFile? imageFile, String menu, String eventName) async {
     if (imageFile == null) return null;
 
     try {
       // Format nama gambar
       String imageName = formatImageName(eventName);
       print('Image name: $imageName');
-      Reference ref = _storage.ref().child('jfestchart/$imageName');
+      Reference ref = _storage.ref().child('$menu/$imageName');
 
       if (kIsWeb) {
         // Web
@@ -51,7 +51,7 @@ class StorageService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> uploadImages(List<XFile> images, String eventName) async {
+  Future<List<Map<String, dynamic>>> uploadImages(List<XFile> images, String menu, String eventName) async {
     List<Map<String, dynamic>> posterList = [];
 
     for (int i = 0; i < images.length; i++) {
@@ -63,7 +63,7 @@ class StorageService {
       // Format nama yang akan di-upload
       String imageName = originalFileName;
       print('Image name: $imageName');
-      Reference ref = _storage.ref().child('jfestchart/$imageName');
+      Reference ref = _storage.ref().child('$menu/$imageName');
 
       try {
         if (kIsWeb) {
@@ -77,7 +77,7 @@ class StorageService {
         String downloadURL = await ref.getDownloadURL();
         posterList.add({
           "url": downloadURL,
-          "path": "jfestchart/$imageName",
+          "path": "$menu/$imageName",
           "is_main": false,
           "order": i + 1
         });
@@ -90,10 +90,10 @@ class StorageService {
     return posterList;
   }
 
-  Future<String?> getImageUrl(String eventName) async {
+  Future<String?> getImageUrl(String menu, String eventName) async {
     try {
       String imageName = formatImageName(eventName);
-      Reference ref = _storage.ref().child('jfestchart/$imageName');
+      Reference ref = _storage.ref().child('$menu/$imageName');
       String downloadURL = await ref.getDownloadURL();
       return downloadURL;
     } catch (e) {
@@ -140,12 +140,12 @@ class StorageService {
     }
   }
 
-  Future<void> deletePoster(BuildContext context, int index, String eventId) async {
+  Future<void> deletePoster(BuildContext context, int index, String menu, String eventId) async {
     try {
       final eventProvider = Provider.of<EventProvider>(context, listen: false);
       final FirebaseFirestore firestore = FirebaseFirestore.instance;
       final String documentId = eventId;
-      DocumentSnapshot doc = await firestore.collection('jfestchart').doc(documentId).get();
+      DocumentSnapshot doc = await firestore.collection(menu).doc(documentId).get();
 
       if (doc.exists) {
         List<dynamic> posters = List.from(doc['posters']);
@@ -160,7 +160,7 @@ class StorageService {
           posters.first['is_main'] = true;
         }
 
-        await firestore.collection('jfestchart').doc(documentId).update({
+        await firestore.collection(menu).doc(documentId).update({
           'posters': posters,
           'is_postered': posters.isNotEmpty,
         });

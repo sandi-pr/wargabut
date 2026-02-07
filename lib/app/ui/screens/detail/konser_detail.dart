@@ -25,30 +25,25 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:wargabut/app/services/share_service_gate.dart';
 
+import '../../../provider/konser_provider.dart';
 import '../../../provider/location_provider.dart';
 import '../../../provider/transit_provider.dart';
 
-final List<String> imgList = [
-  'https://firebasestorage.googleapis.com/v0/b/wargabut-11.appspot.com/o/jfestchart%2F7th_anniversary_pubg_mobile_main.jpg?alt=media&token=92ae74c2-f069-46db-9e67-c82dfc26f552',
-  'https://firebasestorage.googleapis.com/v0/b/wargabut-11.appspot.com/o/jfestchart%2F7th_anniversary_pubg_mobile_coswalk.jpg?alt=media&token=e083dd87-e74e-44ab-8060-0b3d3ce0adc9',
-  'https://firebasestorage.googleapis.com/v0/b/wargabut-11.appspot.com/o/jfestchart%2F7th_anniversary_pubg_mobile_dance.jpg?alt=media&token=b36d3eda-fe4e-4829-b1dc-76bc60deba9a'
-];
-
-class EventDetailPage extends StatefulWidget {
+class KonserDetailPage extends StatefulWidget {
   final Map<String, dynamic>? data;
   final String eventId;
 
-  const EventDetailPage({
+  const KonserDetailPage({
     super.key,
     required this.eventId,
     this.data,
   });
 
   @override
-  State<EventDetailPage> createState() => _EventDetailPageState();
+  State<KonserDetailPage> createState() => _KonserDetailPageState();
 }
 
-class _EventDetailPageState extends State<EventDetailPage> {
+class _KonserDetailPageState extends State<KonserDetailPage> {
   bool _isLoading = true;
   bool _postersAreLoading = true;
   String? _errorMessage;
@@ -127,7 +122,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       // Jika tidak (dibuka via URL), fetch dari Firestore
       try {
         final doc = await FirebaseFirestore.instance
-            .collection('jfestchart')
+            .collection('dfestkonser')
             .doc(widget.eventId)
             .get();
 
@@ -138,7 +133,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
           });
         } else {
           setState(() {
-            _errorMessage = "Event tidak ditemukan.";
+            _errorMessage = "Festival tidak ditemukan.";
             _isLoading = false;
           });
         }
@@ -195,7 +190,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   }
 
   Future<void> _updateEventToFirestore(BuildContext context) async {
-    final eventProvider = context.read<EventProvider>();
+    final eventProvider = context.read<KonserProvider>();
     final messenger = ScaffoldMessenger.of(context);
     try {
       final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -205,7 +200,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       bool isImage = false;
 
       DocumentSnapshot doc =
-      await firestore.collection('jfestchart').doc(documentId).get();
+      await firestore.collection('dfestkonser').doc(documentId).get();
 
       if (doc.exists &&
           doc.data() != null &&
@@ -218,7 +213,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
         isImage = true;
       }
 
-      await firestore.collection('jfestchart').doc(documentId).update({
+      await firestore.collection('dfestkonser').doc(documentId).update({
         'event_name': _eventNameController.text,
         'date': _dateEventController.text,
         'area': _areaController.text,
@@ -235,7 +230,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       await eventProvider.fetchData(forceRefresh: true);
 
       messenger.showSnackBar(
-        const SnackBar(content: Text('Event berhasil diperbarui!')),
+        const SnackBar(content: Text('Festival berhasil diperbarui!')),
       );
 
       setState(() {
@@ -245,40 +240,40 @@ class _EventDetailPageState extends State<EventDetailPage> {
       if (!mounted) return;
       // Handle errors, e.g., show an error message
       if (kDebugMode) {
-        print('Error updating event: $e');
+        print('Error updating festival: $e');
       }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Failed to update event.')),
+        const SnackBar(content: Text('Failed to update festival.')),
       );
     }
   }
 
   Future<void> _deleteEventFromFirestore(BuildContext context) async {
-    final eventProvider = Provider.of<EventProvider>(context, listen: false);
+    final eventProvider = Provider.of<KonserProvider>(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
     try {
       await FirebaseFirestore.instance
-          .collection('jfestchart')
+          .collection('dfestkonser')
           .doc(_eventData!['id']) // Gunakan _eventData
           .delete();
 
       if (!mounted) return;
 
-      router.go('/jeventku');
+      router.go('/dkonser');
 
       messenger.showSnackBar(
-        const SnackBar(content: Text('Event berhasil dihapus')),
+        const SnackBar(content: Text('Festival berhasil dihapus')),
       );
 
 
       await eventProvider.fetchData(forceRefresh: true);
     } catch (e) {
-      print('Error deleting event: $e');
+      print('Error deleting festival: $e');
       if (!mounted) return;
 
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menghapus event: $e')),
+        SnackBar(content: Text('Gagal menghapus festival: $e')),
       );
     }
   }
@@ -338,7 +333,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
     if (selectedImages != null && selectedImages.isNotEmpty) {
       List<Map<String, dynamic>> newPosters = await _storageService
-          .uploadImages(selectedImages, 'jfestchart', _eventData!['event_name']);
+          .uploadImages(selectedImages, 'dkonser', _eventData!['event_name']);
 
       await addPostersToFirestore(newPosters); // Menambahkan bukan mengganti
     }
@@ -348,7 +343,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
     try {
       final String documentId = _eventData!['id'];
       await FirebaseFirestore.instance
-          .collection('jfestchart')
+          .collection('dfestkonser')
           .doc(documentId)
           .update({
         'posters': posters,
@@ -374,7 +369,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       final FirebaseFirestore firestore = FirebaseFirestore.instance;
       final String documentId = _eventData!['id'];
       DocumentSnapshot doc =
-          await firestore.collection('jfestchart').doc(documentId).get();
+          await firestore.collection('dfestkonser').doc(documentId).get();
 
       List<dynamic> existingPosters = [];
       if (doc.exists &&
@@ -399,7 +394,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
       existingPosters.addAll(newPosters);
 
-      await firestore.collection('jfestchart').doc(documentId).update({
+      await firestore.collection('dfestkonser').doc(documentId).update({
         'posters': existingPosters,
         'is_postered': true,
       });
@@ -416,7 +411,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
     try {
       final firestore = FirebaseFirestore.instance;
       DocumentReference docRef =
-          firestore.collection('jfestchart').doc(_eventData!['id']);
+          firestore.collection('dfestkonser').doc(_eventData!['id']);
       DocumentSnapshot doc = await docRef.get();
 
       if (doc.exists) {
@@ -441,7 +436,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   Future<List<Map<String, String>>> fetchPosters(String eventId) async {
     try {
       DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('jfestchart')
+          .collection('dfestkonser')
           .doc(eventId)
           .get();
 
@@ -571,7 +566,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       // 3. Dapatkan Lat/Lng dari nama lokasi event
       final destLatLng = await GeocodingService.getLatLngFromLocationName(_eventData!['location']);
       if (destLatLng == null) {
-        throw Exception("Lokasi tujuan event tidak dapat ditemukan.");
+        throw Exception("Lokasi festival tidak dapat ditemukan.");
       }
 
       // 4. Panggil service Anda untuk mendapatkan detail rute transit
@@ -806,8 +801,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final String eventName = _eventData!['event_name'];
     final String eventId = _eventData!['id'];
 
-    final String eventUrl = "https://wargabut.id/jeventku/$eventId";
-    final String shareText = "Yuk, datang ke event '$eventName'! Cek info lengkapnya di sini:";
+    final String eventUrl = "https://wargabut.id/dkonser/$eventId";
+    final String shareText = "Yuk, datang ke festival '$eventName'! Cek info lengkapnya di sini:";
     final String shareTitle = eventName;
 
     if (kIsWeb) {
@@ -876,7 +871,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       title: AutoSizeText(_eventData!['event_name'], maxLines: 1),
       leading: Navigator.canPop(context) ? null : IconButton(
         icon: const Icon(Icons.arrow_back),
-        onPressed: () => context.go('/jeventku'),
+        onPressed: () => context.go('/dkonser'),
       ),
       actions: [
         // =======================================================
@@ -885,7 +880,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
         IconButton(
           icon: const Icon(Icons.share),
           onPressed: () => _shareEvent(context),
-          tooltip: 'Bagikan Event',
+          tooltip: 'Bagikan Festival',
         ),
 
         // Tombol menu untuk admin tetap ada setelahnya
@@ -911,7 +906,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   AppBar _buildEditModeAppBar(BuildContext context) {
     return AppBar(
-      title: const Text("Edit Event"),
+      title: const Text("Edit Festival"),
       leading: IconButton(
         icon: const Icon(Icons.close),
         onPressed: () => setState(() => _editMode = false),
@@ -1181,7 +1176,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   Widget _buildEventForm() {
     return Column(
       children: [
-        TextField(controller: _eventNameController, decoration: const InputDecoration(labelText: 'Nama Event')),
+        TextField(controller: _eventNameController, decoration: const InputDecoration(labelText: 'Nama Festival')),
         const SizedBox(height: 16),
         TextField(controller: _dateEventController, decoration: const InputDecoration(labelText: 'Tanggal')),
         const SizedBox(height: 16),
@@ -1249,7 +1244,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
         // Mengganti placeholder dengan StreamBuilder yang sesungguhnya.
         StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
-              .collection('jfestchart')
+              .collection('dfestkonser')
               .doc(_eventData!['id']) // Menggunakan _eventData yang sudah pasti ada
               .snapshots(),
           builder: (context, snapshot) {
@@ -1331,7 +1326,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
                           // Memanggil fungsi yang sudah ada
-                          _storageService.deletePoster(context, index, 'jfestchart', _eventData!['id']);
+                          _storageService.deletePoster(context, index, 'dkonser', _eventData!['id']);
                         },
                       ),
                     ],
@@ -1447,7 +1442,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
               // Tombol Aksi Utama
               ElevatedButton(
-                onPressed: locationProvider.isFetching || transitProvider.isFetching
+                onPressed: locationProvider.isFetching
                     ? null
                     : () async {
                   final asked = localStorage.getItem('locationPermissionAsked') == 'true';
@@ -1456,23 +1451,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     await _confirmLocationPermission(); // tampilkan dialog
                   } else {
                     locationProvider.fetchUserLocationWeb(); // langsung ambil lokasi
-                    await locationProvider.fetchUserLocationWeb();
-                    final userPos = locationProvider.userPosition;
-                    if (userPos != null) {
-                      await transitProvider.fetchTransitRoutes(
-                        userPosition: userPos,
-                        destinationLocation: _eventData!['location'],
-                        allowedTravelModes: allowedTravelModes,
-                        routingPreference: routingPreference,
-                      );
-                    }
                   }
                 },
-                child: Text(
-                  locationProvider.userPosition == null
-                      ? "Cari Rute"
-                      : (transitProvider.routes.isEmpty ? "Cari Rute" : "Perbarui"),
-                ),
+                child: Text(locationProvider.userPosition == null ? "Cari Rute" : "Perbarui"),
               ),
             ],
           ),
@@ -1526,7 +1507,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Konfirmasi Hapus'),
-          content: const Text('Apakah Anda yakin ingin menghapus event ini? Aksi ini tidak dapat dibatalkan.'),
+          content: const Text('Apakah Anda yakin ingin menghapus festival ini? Aksi ini tidak dapat dibatalkan.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),

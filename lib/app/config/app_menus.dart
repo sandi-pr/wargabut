@@ -8,6 +8,12 @@ final List<MenuItemModel> appMenus = [
     route: "/jeventku",
     headerImage: "assets/images/JEventku_banner_chibi.png",
   ),
+  // MenuItemModel(
+  //   label: "AniChekku",
+  //   subtitle: "Berita Anime Terbaru",
+  //   route: "/anichekku",
+  //   headerImage: "assets/images/AniChekku_banner_chibi.png",
+  // ),
   MenuItemModel(
     label: "dKonser",
     subtitle: "Media Festival Konser",

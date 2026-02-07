@@ -4,18 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:wargabut/app/provider/event_provider.dart';
+import 'package:wargabut/app/provider/konser_provider.dart';
 import 'package:wargabut/app/services/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-class CreateEventPage extends StatefulWidget {
-  const CreateEventPage({super.key});
+class CreateKonserPage extends StatefulWidget {
+  const CreateKonserPage({super.key});
 
   @override
-  State<CreateEventPage> createState() => _CreateEventPageState();
+  State<CreateKonserPage> createState() => _CreateKonserPageState();
 }
 
-class _CreateEventPageState extends State<CreateEventPage> {
+class _CreateKonserPageState extends State<CreateKonserPage> {
   final _eventNameController = TextEditingController();
   final _dateEventController = TextEditingController();
   final _dateController = TextEditingController();
@@ -138,7 +139,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
   Future<void> _uploadImage(String eventName) async {
     if (_imageFile == null) return;
-    String? url = await _storageService.uploadImage(_imageFile, 'jfestchart', eventName);
+    String? url = await _storageService.uploadImage(_imageFile, 'dkonser', eventName);
     setState(() {
       _downloadURL = url;
     });
@@ -152,7 +153,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       List<Map<String, dynamic>> uploadedPosters =
           await _storageService.uploadImages(
         selectedImages,
-        'jfestchart',
+        'dkonser',
         _eventNameController.text,
       );
 
@@ -169,7 +170,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   Future<void> _addPostersToFirestore(
       String eventId, List<Map<String, dynamic>> posters) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    await firestore.collection('jfestchart').doc(eventId).update({
+    await firestore.collection('dfestkonser').doc(eventId).update({
       'posters': posters,
       'is_postered': posters.isNotEmpty,
     });
@@ -197,14 +198,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
   }
 
   Future<void> _saveEventToFirestore(BuildContext context) async {
-    final eventProvider = Provider.of<EventProvider>(context, listen: false);
+    final eventProvider = Provider.of<KonserProvider>(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     // Pastikan nama event tidak kosong
     if (_eventNameController.text.trim().isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Nama event tidak boleh kosong!')),
+        const SnackBar(content: Text('Nama festival tidak boleh kosong!')),
       );
       return;
     }
@@ -217,14 +218,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
       String eventIdSlug = _createSlugFromName(eventName);
 
       // 2. Tentukan DocumentReference dengan slug kustom
-      DocumentReference eventRef = firestore.collection('jfestchart').doc(eventIdSlug);
+      DocumentReference eventRef = firestore.collection('dfestkonser').doc(eventIdSlug);
 
       // 3. (SANGAT PENTING) Cek apakah dokumen dengan ID ini sudah ada
       final docSnapshot = await eventRef.get();
       if (docSnapshot.exists) {
         // Jika sudah ada, beri peringatan dan batalkan penyimpanan
         messenger.showSnackBar(
-          const SnackBar(content: Text('Gagal: Event dengan nama yang mirip sudah ada! Coba ganti nama event.')),
+          const SnackBar(content: Text('Gagal: Festival dengan nama yang mirip sudah ada! Coba ganti nama festival.')),
         );
         return; // Hentikan fungsi
       }
@@ -260,14 +261,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
       await eventProvider.fetchData(forceRefresh: true);
 
       messenger.showSnackBar(
-        const SnackBar(content: Text('Event berhasil dibuat!')),
+        const SnackBar(content: Text('Festival berhasil dibuat!')),
       );
       navigator.pop();
     } catch (e) {
       if (!mounted) return;
-      print('Gagal menambahkan event: $e');
+      print('Gagal menambahkan festival: $e');
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menambahkan event: $e')),
+        SnackBar(content: Text('Gagal menambahkan festival: $e')),
       );
     }
   }
@@ -276,7 +277,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Event'),
+        title: const Text('Add Festival'),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
@@ -294,14 +295,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
             MediaQuery.of(context).size.width < 720
                 ? Column(
                     children: [
-                      Text("Detail Event", style: Theme.of(context).textTheme.headlineSmall),
+                      Text("Detail Festival", style: Theme.of(context).textTheme.headlineSmall),
                       const SizedBox(height: 8.0),
                       TextField(
                         controller: _eventNameController,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
-                          labelText: 'Nama Event',
-                          hintText: 'Masukkan nama event',
+                          labelText: 'Nama Festival',
+                          hintText: 'Masukkan nama festival',
                         ),
                       ),
                       const SizedBox(height: 16.0),
@@ -310,7 +311,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           labelText: 'Tanggal',
-                          hintText: 'Masukkan tanggal event',
+                          hintText: 'Masukkan tanggal festival',
                         ),
                       ),
                       const SizedBox(height: 16.0),
@@ -319,7 +320,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           labelText: 'Area',
-                          hintText: 'Masukkan area event',
+                          hintText: 'Masukkan area festival',
                           helperText: 'Contoh: Jakarta, Surabaya, Bandung (wilayah umum)',
                         ),
                       ),
@@ -329,7 +330,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           labelText: 'Lokasi',
-                          hintText: 'Masukkan lokasi event',
+                          hintText: 'Masukkan lokasi festival',
                           helperText: 'Contoh: JIEXPO Kemayoran, ICE BSD (nama venue)',
                         ),
                       ),
@@ -372,7 +373,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         controller: _descriptionController,
                         decoration: const InputDecoration(
                           labelText: 'Deskripsi',
-                          hintText: 'Masukkan deskripsi event',
+                          hintText: 'Masukkan deskripsi festival',
                           border: OutlineInputBorder(),
                         ),
                         maxLines: 4,
@@ -573,8 +574,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               controller: _eventNameController,
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
-                                labelText: 'Nama Event',
-                                hintText: 'Masukkan nama event',
+                                labelText: 'Nama Festival',
+                                hintText: 'Masukkan nama festival',
                               ),
                             ),
                             const SizedBox(height: 16.0),
@@ -583,7 +584,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 labelText: 'Tanggal',
-                                hintText: 'Masukkan tanggal event',
+                                hintText: 'Masukkan tanggal festival',
                               ),
                             ),
                             const SizedBox(height: 16.0),
@@ -592,7 +593,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 labelText: 'Area',
-                                hintText: 'Masukkan area event',
+                                hintText: 'Masukkan area festival',
                                 helperText: 'Contoh: Jakarta, Surabaya, Bandung (wilayah umum)',
                               ),
                             ),
@@ -602,7 +603,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 labelText: 'Lokasi',
-                                hintText: 'Masukkan lokasi event',
+                                hintText: 'Masukkan lokasi festival',
                                 helperText: 'Contoh: JIEXPO Kemayoran, ICE BSD (nama venue)',
                               ),
                             ),
@@ -643,7 +644,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               controller: _descriptionController,
                               decoration: const InputDecoration(
                                 labelText: 'Deskripsi',
-                                hintText: 'Masukkan deskripsi event',
+                                hintText: 'Masukkan deskripsi festival',
                                 border: OutlineInputBorder(),
                               ),
                               maxLines: 4,

@@ -8,21 +8,25 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wargabut/app/provider/aninews_provider.dart';
 import 'package:wargabut/app/provider/auth_provider.dart';
 import 'package:wargabut/app/provider/event_provider.dart';
 import 'package:wargabut/app/provider/konser_provider.dart';
 import 'package:wargabut/app/ui/screens/chat/gemini_firebase.dart';
+import 'package:wargabut/app/ui/screens/create/create_ani_news.dart';
 import 'package:wargabut/app/ui/screens/create/create_event.dart';
 import 'package:wargabut/app/ui/screens/detail/event_detail.dart';
-import 'package:wargabut/app/ui/screens/event_list/event_list.dart';
-import 'package:wargabut/app/ui/screens/home/event_list_page.dart';
+import 'package:wargabut/app/ui/screens/list/aninews_list_page.dart';
+import 'package:wargabut/app/ui/screens/list/event_list_page.dart';
 import 'package:wargabut/app/ui/screens/home/welcome.dart';
 import 'package:wargabut/theme.dart';
 import 'app/provider/location_provider.dart';
 import 'app/provider/theme_provider.dart';
 import 'app/provider/transit_provider.dart';
 import 'app/ui/screens/chat/chat_bot.dart';
-import 'app/ui/screens/dkonser/konser_list_page.dart';
+import 'app/ui/screens/create/create_festival.dart';
+import 'app/ui/screens/detail/konser_detail.dart';
+import 'app/ui/screens/list/konser_list_page.dart';
 import 'firebase_options.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
@@ -103,6 +107,10 @@ void main() async {
         builder: (context, state) => const EventListPage(),
       ),
       GoRoute(
+        path: '/anichekku',
+        builder: (context, state) => const AniNewsListPage(),
+      ),
+      GoRoute(
         path: '/dkonser',
         builder: (context, state) => const KonserListPage(),
       ),
@@ -118,11 +126,49 @@ void main() async {
         },
       ),
       GoRoute(
+        path: '/anichekku/baru',
+        builder: (context, state) => const CreateAniNewsPage(),
+        redirect: (context, state) {
+          // Validasi admin menggunakan instance authProvider yang sama
+          if (!authProvider.isAdmin) {
+            return '/anichekku'; // Arahkan jika bukan admin
+          }
+          return null; // Izinkan jika admin
+        },
+      ),
+      GoRoute(
+        path: '/dkonser/baru',
+        builder: (context, state) => const CreateKonserPage(),
+        redirect: (context, state) {
+          // Validasi admin menggunakan instance authProvider yang sama
+          if (!authProvider.isAdmin) {
+            return '/dkonser'; // Arahkan jika bukan admin
+          }
+          return null; // Izinkan jika admin
+        },
+      ),
+      GoRoute(
         path: '/jeventku/:eventId',
         builder: (context, state) {
           final eventId = state.pathParameters['eventId']!;
           final data = state.extra as Map<String, dynamic>?;
           return EventDetailPage(eventId: eventId, data: data);
+        },
+      ),
+      GoRoute(
+        path: '/anichekku/:eventId',
+        builder: (context, state) {
+          final eventId = state.pathParameters['eventId']!;
+          final data = state.extra as Map<String, dynamic>?;
+          return EventDetailPage(eventId: eventId, data: data);
+        },
+      ),
+      GoRoute(
+        path: '/dkonser/:eventId',
+        builder: (context, state) {
+          final eventId = state.pathParameters['eventId']!;
+          final data = state.extra as Map<String, dynamic>?;
+          return KonserDetailPage(eventId: eventId, data: data);
         },
       ),
       GoRoute(
@@ -143,10 +189,11 @@ void main() async {
         ChangeNotifierProvider.value(value: authProvider),
         // Buat EventProvider dan langsung panggil fetchData
         ChangeNotifierProvider(create: (_) => EventProvider()..fetchData()),
+        ChangeNotifierProvider(create: (_) => KonserProvider()..fetchData()),
+        ChangeNotifierProvider(create: (_) => AniNewsProvider()..fetchData()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => TransitProvider()),
-        ChangeNotifierProvider(create: (_) => KonserProvider()),
       ],
       child: MyApp(router: router, initialRoute: '',),
     ),

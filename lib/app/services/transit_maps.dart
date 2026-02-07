@@ -134,6 +134,7 @@ class GeocodingService {
 
     try {
       final response = await Dio().get(url);
+      print("response: $response");
       final data = response.data;
 
       if (data['status'] == 'OK' && data['results'].isNotEmpty) {

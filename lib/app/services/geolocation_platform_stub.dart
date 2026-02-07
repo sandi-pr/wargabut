@@ -1,0 +1,1 @@
+Future<({double lat, double lng})> getUserLocationPlatform() => throw UnsupportedError('Not supported');

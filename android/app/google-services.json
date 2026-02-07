@@ -12,7 +12,20 @@
           "package_name": "com.example.wargabut"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "825512861147-afb8t3udck6cstd9veejgtu3dvdvsiji.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.wargabut",
+            "certificate_hash": "09c8ba3be80b0d1dfb712f6f4a465e32fb8398c1"
+          }
+        },
+        {
+          "client_id": "825512861147-j61fo9iu3r3i9651j6dk8bd61jjevheq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA6AdPjHPDD-h-YoKn35HWuIJPsGGYu6EY"
@@ -20,18 +33,35 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "825512861147-j61fo9iu3r3i9651j6dk8bd61jjevheq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "825512861147-572c7onn8si1vjj30cate8ghtgb7ift7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.wargabut"
+              }
+            }
+          ]
         }
       }
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:825512861147:android:740e83cf3378f85623dbfe",
+        "mobilesdk_app_id": "1:825512861147:android:18ec3255d250ba3b23dbfe",
         "android_client_info": {
-          "package_name": "com.wargabut.wargabut"
+          "package_name": "id.wargabut.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "825512861147-j61fo9iu3r3i9651j6dk8bd61jjevheq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA6AdPjHPDD-h-YoKn35HWuIJPsGGYu6EY"
@@ -39,7 +69,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "825512861147-j61fo9iu3r3i9651j6dk8bd61jjevheq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "825512861147-572c7onn8si1vjj30cate8ghtgb7ift7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.wargabut"
+              }
+            }
+          ]
         }
       }
     }

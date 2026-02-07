@@ -65,7 +65,7 @@ class KonserProvider with ChangeNotifier {
 
   void setSearchTerm(String value) {
     if (kDebugMode) {
-      print('EventProvider setSearchTerm: value = $value');
+      print('KonserProvider setSearchTerm: value = $value');
     }
     _searchTerm = value;
     _filterEvents();
@@ -105,42 +105,93 @@ class KonserProvider with ChangeNotifier {
   DateTime? _parseDate(String dateString) {
     if (dateString.trim().isEmpty) return null;
 
-    String cleanDateString = dateString.trim();
-    List<String> parts = cleanDateString.split(' ');
+    // 1. Normalisasi string: trim & ubah semua jenis strip (en-dash/em-dash) jadi hyphen biasa
+    String cleanDateString = dateString.trim().replaceAll(RegExp(r'\s*[–—]\s*'), ' - ');
+    String dateToParse = cleanDateString;
 
-    // --- LOGIKA BARU: Coba parsing format "Bulan Tahun" (e.g., "Jul 2025") ---
-    if (parts.length == 2) {
+    // --- Helper untuk mencoba parse tanggal tunggal dengan berbagai format ---
+    DateTime? tryParseSingleDate(String input) {
       try {
-        // Jika berhasil, ia akan mengembalikan tanggal 1 di bulan tersebut,
-        // yang sudah cukup untuk keperluan sorting.
-        return DateFormat('MMM yyyy', 'id_ID').parse(cleanDateString);
-      } catch (e) {
-        // Abaikan error dan biarkan mencoba format selanjutnya di bawah.
-      }
-    }
+        return DateFormat('dd MMM yyyy', 'id_ID').parse(input); // Cth: 12 Apr 2026
+      } catch (e) { /* Lanjut */ }
 
-    // --- LOGIKA LAMA ANDA SEBAGAI FALLBACK ---
-    // untuk format tanggal lengkap dan rentang
-    try {
-      // Jika ada rentang tanggal (misal: "15-16 Mar 2025"), ambil tanggal pertama untuk sorting
-      if (parts.length >= 3 && parts[0].contains('-')) {
-        String firstDatePart = parts[0].split('-')[0].trim();
-        cleanDateString = "$firstDatePart ${parts.sublist(1).join(' ')}";
-      }
-      // Handle rentang antar bulan, e.g., "31 Mei - 01 Jun 2025"
-      else if (parts.length > 3 && parts.contains('-')) {
-        final separatorIndex = parts.indexOf('-');
-        // Ambil bagian sebelum tanda hubung sebagai tanggal mulai
-        cleanDateString = parts.sublist(0, separatorIndex).join(' ');
-      }
+      try {
+        return DateFormat('dd MMMM yyyy', 'id_ID').parse(input); // Cth: 12 April 2026 (FIX UTAMA)
+      } catch (e) { /* Lanjut */ }
 
-      // Coba parsing format "dd MMM yyyy"
-      return DateFormat('dd MMM yyyy', 'id_ID').parse(cleanDateString);
-    } catch (e) {
-      // Jika semua format gagal, kembalikan null
-      print('Error parsing date: $e, input: $dateString');
+      try {
+        return DateFormat('MMM yyyy', 'id_ID').parse(input); // Cth: Apr 2026
+      } catch (e) { /* Lanjut */ }
+
+      try {
+        return DateFormat('MMMM yyyy', 'id_ID').parse(input); // Cth: April 2026
+      } catch (e) { /* Lanjut */ }
+
       return null;
     }
+
+    // 2. Coba parse langsung (untuk kasus bukan rentang, e.g. "12 April 2026")
+    DateTime? result = tryParseSingleDate(dateToParse);
+    if (result != null) return result;
+
+    // 3. --- LOGIKA RENTANG TANGGAL ---
+    if (dateToParse.contains('-')) {
+      try {
+        // Normalisasi spasi di sekitar strip agar split konsisten
+        dateToParse = dateToParse.replaceAll(RegExp(r'\s*-\s*'), ' - ');
+
+        List<String> parts = dateToParse.split(' ');
+
+        if (parts.contains('-')) {
+          final separatorIndex = parts.indexOf('-');
+
+          // Ambil bagian tanggal mulai (sebelum tanda hubung)
+          List<String> startPartList = parts.sublist(0, separatorIndex);
+          String startDateString = startPartList.join(' ');
+
+          // Cek jika bagian awal HANYA berisi angka (Kasus: "12 - 15 Feb 2026")
+          bool isStartDayOnly = startPartList.length == 1 && int.tryParse(startPartList[0]) != null;
+
+          if (isStartDayOnly) {
+            // Ambil info bulan & tahun dari bagian akhir string
+            List<String> endPartList = parts.sublist(separatorIndex + 1);
+            if (endPartList.length >= 2) {
+              String year = endPartList.last;
+              String month = endPartList[endPartList.length - 2];
+              dateToParse = "$startDateString $month $year";
+            }
+          }
+          // Kasus Biasa (e.g., "29 Nov - ...")
+          else {
+            bool startDateHasYear = startPartList.any((part) => part.length == 4 && int.tryParse(part) != null);
+            if (!startDateHasYear) {
+              String? year = parts.firstWhere(
+                      (part) => part.length == 4 && int.tryParse(part) != null,
+                  orElse: () => ''
+              );
+              if (year.isNotEmpty) {
+                startDateString = '$startDateString $year';
+              }
+            }
+            dateToParse = startDateString;
+          }
+        }
+
+        // 4. Parse hasil rekonstruksi rentang (menggunakan helper yang sama)
+        // Ini penting agar rentang dengan nama bulan lengkap ("12 - 14 April 2026") juga bisa diparse
+        result = tryParseSingleDate(dateToParse);
+        if (result != null) return result;
+
+      } catch (e) {
+        // Jika logika rentang gagal, biarkan return null di bawah
+      }
+    }
+
+    // Jika semua format gagal
+    if (kDebugMode) {
+      print('[PARSE ERROR Konser] Gagal mem-parsing tanggal untuk input: "$dateString"');
+    }
+    return null;
   }
 
   String? extractMonthName(String eventDate) {
@@ -371,7 +422,7 @@ class KonserProvider with ChangeNotifier {
         if (coords == null) continue;
 
         await FirebaseFirestore.instance
-            .collection('jfestchart')
+            .collection('dfestkonser')
             .doc(eventId)
             .update({
           'lat': coords.latitude,
@@ -395,7 +446,7 @@ class KonserProvider with ChangeNotifier {
 
   Future<List<String>> getAreas() async {
     QuerySnapshot eventSnapshot =
-    await FirebaseFirestore.instance.collection('jfestchart').get();
+    await FirebaseFirestore.instance.collection('dfestkonser').get();
 
     // Ekstrak semua area dari dokumen event dan buat daftar unik
     Set<String> areaSet = eventSnapshot.docs
@@ -420,9 +471,9 @@ class KonserProvider with ChangeNotifier {
       // Check for cache expiration (1 day)
       late int lastFetchTime;
       if (kIsWeb) {
-        lastFetchTime = int.parse(localStorage.getItem('lastFetchTime')?.toString() ?? '0');
+        lastFetchTime = int.parse(localStorage.getItem('lastFetchFestTime')?.toString() ?? '0');
       } else {
-        lastFetchTime = prefs.getInt('lastFetchTime') ?? 0;
+        lastFetchTime = prefs.getInt('lastFetchFestTime') ?? 0;
       }
 
       DateTime now = DateTime.now();
@@ -440,14 +491,14 @@ class KonserProvider with ChangeNotifier {
       if (isSameDay) {
         // Load from cache
         if (kIsWeb) {
-          _allEvents = jsonDecode(localStorage.getItem('cachedEvents')!)
+          _allEvents = jsonDecode(localStorage.getItem('cachedKonsers')!)
               .cast<Map<String, dynamic>>();
 
           // if (kDebugMode) {
           //   print("Event loaded from localStorage: ${_allEvents.length}");
           // }
 
-          String? cachedAreasString = localStorage.getItem('cachedAreas');
+          String? cachedAreasString = localStorage.getItem('cachedKonserAreas');
           if (cachedAreasString != null) {
             _areas = jsonDecode(cachedAreasString).cast<String>();
             // if (kDebugMode) {
@@ -456,13 +507,13 @@ class KonserProvider with ChangeNotifier {
             notifyListeners();
           }
         } else {
-          _allEvents = jsonDecode(prefs.getString('cachedEvents')!)
+          _allEvents = jsonDecode(prefs.getString('cachedKonsers')!)
               .cast<Map<String, dynamic>>();
           if (kDebugMode) {
             print("Event loaded from prefs: ${_allEvents.length}");
           }
 
-          List<String>? cachedAreas = prefs.getStringList('cachedAreas');
+          List<String>? cachedAreas = prefs.getStringList('cachedKonserAreas');
           if (cachedAreas != null) {
             _areas = cachedAreas;
             if (kDebugMode) {
@@ -484,7 +535,7 @@ class KonserProvider with ChangeNotifier {
         print("Fetching data from Firestore...");
       }
       QuerySnapshot eventSnapshot =
-      await FirebaseFirestore.instance.collection('jfestchart').get();
+      await FirebaseFirestore.instance.collection('dfestkonser').get();
 
       // List<Map<String, dynamic>> eventsWithId = eventSnapshot.docs.map((doc) {
       //   return {
@@ -502,62 +553,94 @@ class KonserProvider with ChangeNotifier {
         // Pastikan event memiliki field 'date'
         if (event.containsKey('date')) {
           try {
-            String dateString = event['date']?.toString().trim() ?? '';
+            String rawDate = event['date']?.toString().trim() ?? '';
 
-            // Jika tanggal kosong, tetap tampilkan eventnya
-            if (dateString.isEmpty) {
+            // Jika tanggal kosong, tetap tampilkan eventnya (dianggap relevan)
+            if (rawDate.isEmpty) {
               return true;
             }
 
             DateTime now = DateTime.now();
-            // Tangani rentang tanggal: "13-14 Mei 2025"
-            List<String> parts = dateString.split(' ');
-            // if (parts.isEmpty) return false;
-
-            if (parts.length == 2) {
-              try {
-                // Coba parse dengan format 'MMM yyyy'
-                final eventMonthDate = DateFormat('MMM yyyy', 'id_ID').parse(dateString);
-
-                // Bandingkan hanya berdasarkan tahun dan bulan
-                final currentMonthDate = DateTime(now.year, now.month);
-
-                // Tampilkan jika bulan event sama dengan atau setelah bulan ini
-                return !eventMonthDate.isBefore(currentMonthDate);
-              } catch (e) {
-                // Jika gagal, ini bukan format "MMM yyyy". Biarkan jatuh ke logika selanjutnya.
-                // Tidak perlu melakukan apa-apa di sini.
-              }
-            }
-
-            // Ambil tanggal kedua jika ada rentang
-            if (parts.length >= 3 && parts[0].contains('-')) {
-              parts[0] = parts[0].split('-')[1].trim();
-              dateString = "${parts[0]} ${parts.sublist(1).join(' ')}";
-            } else if (parts.length > 3 && parts.contains('-')) {
-              if (kDebugMode) {
-                print("parts[2]: ${parts}");
-              }
-              // [31, Mei, -, 01, Jun, 2025] ambil 01 Jun 2025
-              dateString = "${parts[3]} ${parts[4]} ${parts[5]}";
-
-              if (kDebugMode) {
-                print("dateString part2: $dateString");
-              }
-            }
-
-            // Parse tanggal dengan format Indonesia
-            DateTime eventDate = DateFormat('dd MMM yyyy', 'id_ID').parse(dateString);
-
-            // Hanya ambil event yang belum lewat
             DateTime todayOnly = DateTime(now.year, now.month, now.day);
+
+            // --- 1. NORMALISASI STRING (Handler En-dash/Em-dash) ---
+            // Mengubah tanda '–' (en-dash) atau '—' (em-dash) menjadi '-' (strip biasa)
+            String dateString = rawDate.replaceAll('–', '-').replaceAll('—', '-');
+            String dateToParse = dateString;
+
+            // Cek apakah ini format rentang
+            if (dateString.contains('-')) {
+              List<String> parts = dateString.split(' ');
+
+              // --- LOGIKA MENDAPATKAN TANGGAL AKHIR ---
+
+              // Kasus 1: "20-21 Des 2025" atau "23-24 Jan 2026"
+              if (parts.length == 3 && parts[0].contains('-')) {
+                // Ambil tanggal akhir dari rentang, e.g., "21" dari "20-21"
+                String endDate = parts[0].split('-')[1].trim();
+                // Rekonstruksi menjadi "21 Des 2025"
+                dateToParse = "$endDate ${parts[1]} ${parts[2]}";
+
+              }
+              // Kasus 2: "29 Nov - 02 Des 2025"
+              else if (parts.contains('-')) { // Note: contains('-') sekarang aman karena sudah dinormalisasi
+                final separatorIndex = parts.indexOf('-');
+
+                // Pastikan index valid dan ada bagian setelahnya
+                if (separatorIndex != -1 && separatorIndex < parts.length - 1) {
+                  // Ambil semua bagian setelah tanda hubung
+                  List<String> endDateParts = parts.sublist(separatorIndex + 1);
+
+                  // Jika bagian tanggal akhir tidak mengandung tahun (e.g., "02 Des")
+                  if (endDateParts.length == 2) {
+                    // Cari tahun dari akhir string asli (biasanya elemen terakhir)
+                    String year = parts.lastWhere((part) => part.length == 4 && int.tryParse(part) != null, orElse: () => '');
+                    if (year.isNotEmpty) {
+                      endDateParts.add(year); // Tambahkan tahun -> ["02", "Des", "2025"]
+                    }
+                  }
+                  // Gabungkan kembali menjadi string tanggal akhir
+                  dateToParse = endDateParts.join(' ');
+                }
+              }
+            }
+            // Kasus 3: Format "MMM yyyy" (e.g., "Jul 2025") tanpa tanggal spesifik
+            else if (dateString.split(' ').length == 2) {
+              try {
+                final eventMonthDate = DateFormat('MMM yyyy', 'id_ID').parse(dateString);
+                final endOfMonth = DateTime(eventMonthDate.year, eventMonthDate.month + 1, 0);
+                return !endOfMonth.isBefore(todayOnly);
+              } catch (e) {
+                // Lanjut ke logika parsing standar jika gagal
+              }
+            }
+
+            // --- 2. PARSING TANGGAL (Handler Full Month Name) ---
+            DateTime eventDate;
+            try {
+              // Coba format singkatan bulan (misal: "12 Apr 2026")
+              eventDate = DateFormat('dd MMM yyyy', 'id_ID').parse(dateToParse);
+            } catch (e) {
+              try {
+                // Coba format nama bulan lengkap (misal: "12 April 2026")
+                eventDate = DateFormat('dd MMMM yyyy', 'id_ID').parse(dateToParse);
+              } catch (e2) {
+                // Jika masih gagal, lempar error asli untuk ditangkap di luar
+                throw e;
+              }
+            }
+
             DateTime eventOnly = DateTime(eventDate.year, eventDate.month, eventDate.day);
 
+            // Tampilkan hanya event yang tanggal akhirnya belum lewat dari hari ini
             return !eventOnly.isBefore(todayOnly);
+
           } catch (e) {
             if (kDebugMode) {
-              print('Gagal parse tanggal: ${event['date']}');
+              // Gunakan event['date'] asli untuk log agar tahu sumber masalahnya
+              print('[FILTER-ERROR Konser] Gagal parse tanggal: "${event['date']}" -> $e');
             }
+            // Jika gagal parse, anggap event tidak relevan (atau return true jika ingin permissive)
             return false;
           }
         }
@@ -578,15 +661,15 @@ class KonserProvider with ChangeNotifier {
       _filterEvents();
       if (kIsWeb) {
         await initLocalStorage();
-        localStorage.setItem('cachedEvents', jsonEncode(_allEvents));
-        localStorage.setItem('cachedAreas', jsonEncode(_areas));
+        localStorage.setItem('cachedKonsers', jsonEncode(_allEvents));
+        localStorage.setItem('cachedKonserAreas', jsonEncode(_areas));
         localStorage.setItem(
-            'lastFetchTime', DateTime.now().millisecondsSinceEpoch.toString());
+            'lastFetchFestTime', DateTime.now().millisecondsSinceEpoch.toString());
       } else {
-        await prefs.setString('cachedEvents', jsonEncode(_allEvents));
-        await prefs.setStringList('cachedAreas', _areas);
+        await prefs.setString('cachedKonsers', jsonEncode(_allEvents));
+        await prefs.setStringList('cachedKonserAreas', _areas);
         await prefs.setInt(
-            'lastFetchTime', DateTime.now().millisecondsSinceEpoch);
+            'lastFetchFestTime', DateTime.now().millisecondsSinceEpoch);
       }
       if (kDebugMode) {
         print("✅ Data fetched and cached");

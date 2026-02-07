@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:localstorage/localstorage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wargabut/app/ui/screens/home/event_list_page.dart';
+import 'package:wargabut/app/ui/screens/list/event_list_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class WelcomePage extends StatefulWidget {
