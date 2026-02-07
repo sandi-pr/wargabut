@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:month_picker_dialog/month_picker_dialog.dart';
 import 'package:provider/provider.dart';
+import 'package:wargabut/app/ui/components/tile/konser_list_tile.dart';
 
 // Providers & Models
 import '../../../provider/auth_provider.dart';
@@ -180,7 +181,7 @@ class _KonserListPageState extends State<KonserListPage> {
               config: config,
               upcomingEvents: eventProvider.nearestEvents,
               onSeeAllUpcoming: () => eventProvider.showFullList(),
-              itemBuilder: (_, item) => EventListTile(data: item),
+              itemBuilder: (_, item) => KonserListTile(data: item),
             )
             // MENGGUNAKAN SHARED COMPONENT GRID RESULT
                 : SharedGridResult(
@@ -188,7 +189,7 @@ class _KonserListPageState extends State<KonserListPage> {
               data: eventProvider.filteredEvents,
               config: config,
               onClearFilter: () => eventProvider.clearFilters(),
-              itemBuilder: (_, item) => EventListTile(data: item),
+              itemBuilder: (_, item) => KonserListTile(data: item),
             ),
           ),
         ],

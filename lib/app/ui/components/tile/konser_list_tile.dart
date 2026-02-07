@@ -41,7 +41,7 @@ class _KonserListTileState extends State<KonserListTile> {
     return SharedEventCard(
       data: widget.data,
       isAdmin: _isAdmin,
-      storageBucket: 'dkonser', // Bucket khusus Konser
+      storageBucket: 'dfestkonser', // Bucket khusus Konser
       onTap: _navigateToDetail,
     );
   }
