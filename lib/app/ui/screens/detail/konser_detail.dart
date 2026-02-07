@@ -1450,7 +1450,16 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
                   if (locationProvider.userPosition == null && !asked) {
                     await _confirmLocationPermission(); // tampilkan dialog
                   } else {
-                    locationProvider.fetchUserLocationWeb(); // langsung ambil lokasi
+                    await locationProvider.fetchUserLocationWeb();
+                    final userPos = locationProvider.userPosition;
+                    if (userPos != null) {
+                      await transitProvider.fetchTransitRoutes(
+                        userPosition: userPos,
+                        destinationLocation: _eventData!['location'],
+                        allowedTravelModes: allowedTravelModes,
+                        routingPreference: routingPreference,
+                      );
+                    } // langsung ambil lokasi
                   }
                 },
                 child: Text(locationProvider.userPosition == null ? "Cari Rute" : "Perbarui"),

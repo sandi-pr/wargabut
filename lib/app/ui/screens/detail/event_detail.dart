@@ -1455,7 +1455,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   if (locationProvider.userPosition == null && !asked) {
                     await _confirmLocationPermission(); // tampilkan dialog
                   } else {
-                    locationProvider.fetchUserLocationWeb(); // langsung ambil lokasi
                     await locationProvider.fetchUserLocationWeb();
                     final userPos = locationProvider.userPosition;
                     if (userPos != null) {
