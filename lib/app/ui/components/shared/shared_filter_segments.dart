@@ -1,16 +1,30 @@
 import 'package:flutter/material.dart';
 
 class SharedFilterSegments extends StatelessWidget {
-  final bool isLocationSelected;
-  final bool isMonthSelected;
-  // Callback ini mengembalikan Set<String> berisi filter yang aktif
+  final bool isFilter1Selected;
+  final bool isFilter2Selected;
   final Function(Set<String> selectedValues) onSelectionChanged;
+
+  // Parameter kustomisasi (Default ke Lokasi & Bulan agar aman untuk Event/Konser)
+  final String filter1Label;
+  final String filter1Value;
+  final IconData filter1Icon;
+
+  final String filter2Label;
+  final String filter2Value;
+  final IconData filter2Icon;
 
   const SharedFilterSegments({
     super.key,
-    required this.isLocationSelected,
-    required this.isMonthSelected,
+    required this.isFilter1Selected,
+    required this.isFilter2Selected,
     required this.onSelectionChanged,
+    this.filter1Label = 'Lokasi',
+    this.filter1Value = 'Lokasi',
+    this.filter1Icon = Icons.location_on,
+    this.filter2Label = 'Bulan',
+    this.filter2Value = 'Bulan',
+    this.filter2Icon = Icons.calendar_month,
   });
 
   @override
@@ -21,20 +35,20 @@ class SharedFilterSegments extends StatelessWidget {
         emptySelectionAllowed: true,
         multiSelectionEnabled: true,
         selected: <String>{
-          if (isLocationSelected) 'Lokasi',
-          if (isMonthSelected) 'Bulan',
+          if (isFilter1Selected) filter1Value,
+          if (isFilter2Selected) filter2Value,
         },
         onSelectionChanged: onSelectionChanged,
-        segments: const [
+        segments: [
           ButtonSegment(
-              value: 'Lokasi',
-              label: Text('Lokasi'),
-              icon: Icon(Icons.location_on)
+            value: filter1Value,
+            label: Text(filter1Label),
+            icon: Icon(filter1Icon),
           ),
           ButtonSegment(
-              value: 'Bulan',
-              label: Text('Bulan'),
-              icon: Icon(Icons.calendar_month)
+            value: filter2Value,
+            label: Text(filter2Label),
+            icon: Icon(filter2Icon),
           ),
         ],
       ),

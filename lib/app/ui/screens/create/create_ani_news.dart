@@ -23,9 +23,13 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
   final _dateController = TextEditingController();
 
   final _tagController = TextEditingController();
+  final _genreController = TextEditingController();
   final List<String> _tags = [];
+  final List<String> _genres = [];
 
   List<Map<String, dynamic>> newPosters = [];
+
+  bool _isScheduled = false;
 
 
 
@@ -154,14 +158,15 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
 
       try {
         // 4. Gunakan .set() untuk menyimpan data dengan ID kustom
-        print('title: $titleNews, date: ${_dateController.text}, desc: ${_descriptionController.text}, tags: $_tags');
         await eventRef.set({
           'title': titleNews,
           'date': _dateController.text,
           'desc': _descriptionController.text,
           'tags': _tags,
+          'genres': _genres,
           'is_postered': newPosters.isNotEmpty,
           'posters': [],
+          'is_scheduled': _isScheduled,
           'created_at': DateTime.now(),
         });
       } catch (e) {
@@ -200,7 +205,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
           controller: _tagController,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
-            labelText: 'Tag Berita',
+            labelText: 'Tag Berita / Anime',
             hintText: 'Contoh: Anime, Movie, Spring 2025',
           ),
           onSubmitted: (value) {
@@ -222,6 +227,46 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
               onDeleted: () {
                 setState(() {
                   _tags.remove(tag);
+                });
+              },
+            ),
+          )
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenreInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _genreController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Genre Anime',
+            hintText: 'Contoh: Action, Comedy, Romance',
+          ),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              setState(() {
+                _genres.add(value.trim());
+                _genreController.clear();
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: _genres
+              .map(
+                (tag) => Chip(
+              label: Text(tag),
+              onDeleted: () {
+                setState(() {
+                  _genres.remove(tag);
                 });
               },
             ),
@@ -254,18 +299,18 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
             MediaQuery.of(context).size.width < 720
                 ? Column(
               children: [
-                Text(
-                  "Detail Berita Anime",
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
+                // Text(
+                //   "Detail Berita Anime",
+                //   style: Theme.of(context).textTheme.headlineSmall,
+                // ),
+                // const SizedBox(height: 8),
 
                 // Judul Berita
                 TextField(
                   controller: _titleController,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    labelText: 'Judul Berita',
+                    labelText: 'Judul Berita / Anime',
                   ),
                 ),
 
@@ -277,7 +322,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: 'Tanggal Berita / Tayang',
-                    hintText: 'Contoh: 20 Januari 2025',
+                    hintText: 'Contoh: 20 Jan 2026',
                   ),
                 ),
 
@@ -288,14 +333,35 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
 
                 const SizedBox(height: 16),
 
+                _buildGenreInput(),
+
+                const SizedBox(height: 16),
+
                 // Deskripsi
                 TextField(
                   controller: _descriptionController,
                   decoration: const InputDecoration(
-                    labelText: 'Deskripsi Berita',
+                    labelText: 'Deskripsi Berita / Anime',
                     border: OutlineInputBorder(),
                   ),
                   maxLines: 4,
+                ),
+
+                const SizedBox(height: 16),
+
+
+                Row(
+                  children: [
+                    const Text('Jadwal Tayang (Scheduled)'),
+                    Switch(
+                      value: _isScheduled,
+                      onChanged: (value) {
+                        setState(() {
+                          _isScheduled = value;
+                        });
+                      },
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 16),
@@ -304,7 +370,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                 ElevatedButton.icon(
                   onPressed: _uploadImages,
                   icon: const Icon(Icons.image),
-                  label: const Text('Tambah Poster Berita'),
+                  label: const Text('Tambah Poster Berita / Anime'),
                 ),
 
                 const SizedBox(height: 16),
@@ -366,6 +432,9 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                             _buildTagInput(),
                             const SizedBox(height: 16),
 
+                            _buildGenreInput(),
+                            const SizedBox(height: 16),
+
                             TextField(
                               controller: _descriptionController,
                               decoration: const InputDecoration(
@@ -373,6 +442,22 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                                 border: OutlineInputBorder(),
                               ),
                               maxLines: 5,
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            Row(
+                              children: [
+                                const Text('Jadwal Tayang (Scheduled)'),
+                                Switch(
+                                  value: _isScheduled,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _isScheduled = value;
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
                           ],
                         ),

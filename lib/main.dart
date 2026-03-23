@@ -25,6 +25,7 @@ import 'app/provider/theme_provider.dart';
 import 'app/provider/transit_provider.dart';
 import 'app/ui/screens/chat/chat_bot.dart';
 import 'app/ui/screens/create/create_festival.dart';
+import 'app/ui/screens/detail/ani_news_detail.dart';
 import 'app/ui/screens/detail/konser_detail.dart';
 import 'app/ui/screens/list/konser_list_page.dart';
 import 'firebase_options.dart';
@@ -160,7 +161,7 @@ void main() async {
         builder: (context, state) {
           final eventId = state.pathParameters['eventId']!;
           final data = state.extra as Map<String, dynamic>?;
-          return EventDetailPage(eventId: eventId, data: data);
+          return AniNewsDetailPage(newsId: eventId, data: data);
         },
       ),
       GoRoute(

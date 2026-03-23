@@ -101,6 +101,24 @@ class _TemplateCardState extends State<TemplateCard> {
     }
   }
 
+  // Fungsi untuk mencari tag yang formatnya "Musim + Spasi + Tahun (4 digit)"
+  String? _getSeasonTag() {
+    final List<dynamic>? tags = widget.data['tags'];
+    if (tags == null || tags.isEmpty) return null;
+
+    // RegEx: (Winter|Spring|Summer|Fall) diikuti 1 spasi atau lebih, lalu 4 angka
+    // caseSensitive: false agar bisa mendeteksi "spring 2026" maupun "Spring 2026"
+    final regex = RegExp(r'^(Winter|Spring|Summer|Fall)\s+\d{4}$', caseSensitive: false);
+
+    for (var tag in tags) {
+      final tagString = tag.toString().trim();
+      if (regex.hasMatch(tagString)) {
+        return tagString; // Kembalikan tag jika cocok (misal: "Winter 2026")
+      }
+    }
+    return null; // Jika tidak ada yang cocok
+  }
+
   void toggleLayout() {
     setState(() {
       isExpanded = !isExpanded; // Toggle antara Row dan Column
@@ -186,32 +204,56 @@ class _TemplateCardState extends State<TemplateCard> {
                   const SizedBox(height: 8.0),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // --- BAGIAN TANGGAL ---
                       widget.data['date'] == null || widget.data['date'] == ''
                           ? const SizedBox()
                           : ElevatedButton(
-                              onPressed: null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    Theme.of(context).colorScheme.surface,
-                                elevation: 2.0,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12.0, vertical: 8.0),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8.0),
-                                ),
-                              ),
-                              child: Text(
-                                widget.data['date'],
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                  fontSize: 14.0,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
+                        onPressed: null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                          Theme.of(context).colorScheme.surface,
+                          elevation: 2.0,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12.0, vertical: 8.0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                        ),
+                        child: Text(
+                          widget.data['date'],
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+
+                      // --- BAGIAN BADGE MUSIM (BARU) ---
+                      if (_getSeasonTag() != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.tertiaryContainer, // Warna Badge
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Theme.of(context).colorScheme.tertiary.withOpacity(0.5)
                             ),
+                          ),
+                          child: Text(
+                            _getSeasonTag()!, // Tampilkan tag yang ditemukan (misal "Winter 2026")
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onTertiaryContainer,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -287,32 +329,56 @@ class _TemplateCardState extends State<TemplateCard> {
                 const SizedBox(height: 8.0),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // --- BAGIAN TANGGAL ---
                     widget.data['date'] == null || widget.data['date'] == ''
                         ? const SizedBox()
                         : ElevatedButton(
-                            onPressed: null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  Theme.of(context).colorScheme.surface,
-                              elevation: 2.0,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12.0, vertical: 8.0),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                            ),
-                            child: Text(
-                              widget.data['date'],
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                                fontSize: 14.0,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                      onPressed: null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                        Theme.of(context).colorScheme.surface,
+                        elevation: 2.0,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12.0, vertical: 8.0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                      ),
+                      child: Text(
+                        widget.data['date'],
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant,
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+
+                    // --- BAGIAN BADGE MUSIM (BARU) ---
+                    if (_getSeasonTag() != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.tertiaryContainer, // Warna Badge
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: Theme.of(context).colorScheme.tertiary.withOpacity(0.5)
                           ),
+                        ),
+                        child: Text(
+                          _getSeasonTag()!, // Tampilkan tag yang ditemukan (misal "Winter 2026")
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onTertiaryContainer,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

@@ -157,7 +157,7 @@ class _KonserListPageState extends State<KonserListPage> {
       floatingActionButton: SharedAdminFab(
         isAdmin: authProvider.isAdmin,
         onRefresh: () => context.read<KonserProvider>().fetchData(forceRefresh: true),
-        onAdd: () => context.push('/jeventku/baru'),
+        onAdd: () => context.push('/dkonser/baru'),
         onGeocode: () async {
           // Logic geocode pindah sini atau tetap di page, terserah Anda
           await context.read<KonserProvider>().geocodeAllEventsOnce();
@@ -165,11 +165,12 @@ class _KonserListPageState extends State<KonserListPage> {
       ),
 
       bodyContent: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // MENGGUNAKAN SHARED COMPONENT SEGMENTS
           SharedFilterSegments(
-            isLocationSelected: eventProvider.selectedAreas.isNotEmpty,
-            isMonthSelected: eventProvider.selectedMonths.isNotEmpty,
+            isFilter1Selected: eventProvider.selectedAreas.isNotEmpty,
+            isFilter2Selected: eventProvider.selectedMonths.isNotEmpty,
             onSelectionChanged: (val) => _handleFilterChange(val, context),
           ),
           const SizedBox(height: 8.0),

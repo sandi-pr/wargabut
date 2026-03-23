@@ -57,11 +57,11 @@ class TransitService {
 
       List<Map<String, dynamic>> transitSteps = [];
 
-      if (kDebugMode) {
-        print("=========================================");
-        print("cek data: ${json.encode(data)}");
-        print("=========================================");
-      }
+      // if (kDebugMode) {
+      //   print("=========================================");
+      //   print("cek data: ${json.encode(data)}");
+      //   print("=========================================");
+      // }
 
       // Iterasi melalui semua rute yang tersedia
       for (var route in data["routes"]) {
@@ -134,7 +134,7 @@ class GeocodingService {
 
     try {
       final response = await Dio().get(url);
-      print("response: $response");
+      // print("response: $response");
       final data = response.data;
 
       if (data['status'] == 'OK' && data['results'].isNotEmpty) {

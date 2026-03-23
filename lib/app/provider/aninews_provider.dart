@@ -10,17 +10,23 @@ class AniNewsProvider with ChangeNotifier {
   String _searchTerm = '';
   List<Map<String, dynamic>> _allNews = [];
   List<Map<String, dynamic>> _filteredNews = [];
-  List<String> _tags = [];
-  List<String> _selectedTags = [];
+  List<Map<String, dynamic>> _allScheduled = [];
   bool _isLoading = true;
   bool _forceShowList = false;
+  String _activeSection = 'news';
+
+  List<String> _tags = [];
+  List<String> _genres = [];
+  List<String> _selectedTags = [];
+  List<String> _selectedGenres = [];
 
   bool get isForceShow => _forceShowList;
 
   bool get isFilterActive =>
       _forceShowList ||
           _searchTerm.isNotEmpty ||
-          _selectedTags.isNotEmpty;
+          _selectedTags.isNotEmpty ||
+          _selectedGenres.isNotEmpty;
 
   String get searchTerm => _searchTerm;
 
@@ -28,13 +34,19 @@ class AniNewsProvider with ChangeNotifier {
 
   List<Map<String, dynamic>> get filteredNews => _filteredNews;
 
-  List<String> get tags => _tags;
+  List<Map<String, dynamic>> get allScheduled => _allScheduled;
 
+  List<String> get tags => _tags;
+  List<String> get genres => _genres;
   List<String> get selectedTags => _selectedTags;
+  List<String> get selectedGenres => _selectedGenres;
 
   bool get isLoading => _isLoading;
 
-  void showFullList() {
+  String get activeSection => _activeSection;
+
+  void showFullList(String sectionType) {
+    _activeSection = sectionType;
     _forceShowList = true;
     notifyListeners();
   }
@@ -42,8 +54,10 @@ class AniNewsProvider with ChangeNotifier {
   void clearFilters() {
     _searchTerm = '';
     _selectedTags = [];
+    _selectedGenres = [];
     _forceShowList = false;
-    _filterNews(); // Panggil _filterNews setelah membersihkan state
+    _activeSection = 'news';
+    _filterNews();
   }
 
   void setSearchTerm(String value) {
@@ -51,6 +65,16 @@ class AniNewsProvider with ChangeNotifier {
       print('AniNewsProvider setSearchTerm: value = $value');
     }
     _searchTerm = value;
+    _filterNews(); // Langsung panggil filter saja
+  }
+
+  void setSelectedTags(List<String> tags) {
+    _selectedTags = tags;
+    _filterNews();
+  }
+
+  void setSelectedGenres(List<String> genres) {
+    _selectedGenres = genres;
     _filterNews();
   }
 
@@ -113,67 +137,158 @@ class AniNewsProvider with ChangeNotifier {
     return null;
   }
 
-  List<Map<String, dynamic>> get nearestEvents {
-    // 1. Buat salinan dari _allEvents agar tidak mengubah urutan aslinya.
-    final List<Map<String, dynamic>> sortedByDate = List.from(_allNews);
+  List<Map<String, dynamic>> get latestNews {
+    // 1. Ambil HANYA berita biasa (bukan scheduled)
+    final List<Map<String, dynamic>> newsOnly =
+    _allNews.where((news) => news['is_scheduled'] != true).toList();
 
-    // 2. Urutkan salinan tersebut HANYA berdasarkan tanggal.
-    sortedByDate.sort((a, b) {
+    // 2. Urutkan berdasarkan tanggal terbaru (Descending)
+    newsOnly.sort((a, b) {
       DateTime? dateA = _parseDate(a['date']);
       DateTime? dateB = _parseDate(b['date']);
 
       if (dateA == null && dateB == null) return 0;
-      if (dateA == null) return 1; // news tanpa tanggal tetap di bawah
-      if (dateB == null) return -1; // news tanpa tanggal tetap di bawah
+      if (dateA == null) return 1;  // news tanpa tanggal di bawah
+      if (dateB == null) return -1;
 
-      // --- PERUBAHAN DI SINI ---
-      // Urutkan berdasarkan tanggal terbaru (descending/menurun)
-      // dengan membalik urutan perbandingan.
+      // Descending: Tanggal terbaru di atas
       return dateB.compareTo(dateA);
     });
 
-    // 3. Ambil 2 event pertama dari daftar yang sudah terurut.
-    return sortedByDate.take(2).toList();
+    // 3. Ambil 2 berita pertama (Bisa disesuaikan angkanya)
+    return newsOnly.take(2).toList();
+  }
+
+  List<Map<String, dynamic>> get upcomingScheduled {
+    // 1. Ambil HANYA yang dijadwalkan (scheduled)
+    final List<Map<String, dynamic>> scheduledOnly =
+    _allNews.where((news) => news['is_scheduled'] == true).toList();
+
+    // 2. Urutkan berdasarkan tanggal terdekat (Ascending)
+    scheduledOnly.sort((a, b) {
+      DateTime? dateA = _parseDate(a['date']);
+      DateTime? dateB = _parseDate(b['date']);
+
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1; // item tanpa tanggal di bawah
+      if (dateB == null) return -1;
+
+      // Ascending: Tanggal paling dekat dengan hari ini di atas
+      return dateA.compareTo(dateB);
+    });
+
+    // 3. Ambil 2 jadwal pertama (Bisa disesuaikan angkanya)
+    return scheduledOnly.take(2).toList();
+  }
+
+  // Helper untuk mengubah "Winter 2026" menjadi skor angka agar mudah diurutkan
+  int _getSeasonScore(String tag) {
+    final regex = RegExp(r'^(Winter|Spring|Summer|Fall)\s+(\d{4})$', caseSensitive: false);
+    final match = regex.firstMatch(tag.trim());
+
+    if (match == null) return -1; // Bukan tag musim
+
+    String season = match.group(1)!.toLowerCase();
+    int year = int.parse(match.group(2)!);
+
+    int quarter = 0;
+    if (season == 'winter') {
+      quarter = 0;
+    } else if (season == 'spring') {
+      quarter = 1;
+    }
+    else if (season == 'summer') {
+      quarter = 2;
+    }
+    else if (season == 'fall') {
+      quarter = 3;
+    }
+
+    return (year * 4) + quarter;
   }
 
   void _filterNews() {
-    // Filter the events based on search term, selected areas, and selected months
-    _filteredNews = _allNews.where((news) {
+    // 1. Ambil data yang cocok dengan pencarian (Search & Tags)
+    List<Map<String, dynamic>> searchResults = _allNews.where((news) {
       String newsTitle = news['title'] ?? '';
       String eventDate = news['date'] ?? '';
       String description = news['desc'] ?? '';
-      // String area = news['tags'] ?? [];
-      bool matchesSearchTerm =
-          newsTitle.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-              eventDate.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-              description.toLowerCase().contains(_searchTerm.toLowerCase());
+      List<dynamic> newsTags = news['tags'] ?? [];
+      List<dynamic> newsGenres = news['genres'] ?? [];
 
-      // Filter by tags
-      // bool matchesTags = _selectedTags.isEmpty || _selectedTags.contains(area);
+      // 1. Pengecekan Kata Kunci Pencarian (Search Bar)
+      String searchLower = _searchTerm.toLowerCase();
+      bool matchesText = newsTitle.toLowerCase().contains(searchLower) ||
+          eventDate.toLowerCase().contains(searchLower) ||
+          description.toLowerCase().contains(searchLower);
+      bool matchesSearchTags = newsTags.any((t) => t.toString().toLowerCase().contains(searchLower));
+      bool matchesSearchGenres = newsGenres.any((g) => g.toString().toLowerCase().contains(searchLower));
 
-      return matchesSearchTerm;
+      bool passSearch = matchesText || matchesSearchTags || matchesSearchGenres;
+
+      // 2. Pengecekan Filter Chip (Tag & Genre dari Filter Sheet)
+      bool passSelectedTags = _selectedTags.isEmpty ||
+          newsTags.any((t) => _selectedTags.contains(t.toString()));
+
+      bool passSelectedGenres = _selectedGenres.isEmpty ||
+          newsGenres.any((g) => _selectedGenres.contains(g.toString()));
+
+      // Harus lolos pencarian teks DAN lolos filter chip
+      return passSearch && passSelectedTags && passSelectedGenres;
     }).toList();
 
-    // Sort the filtered news based on date
+    // 2. Pisahkan data menjadi 2 list berdasarkan 'is_scheduled'
+    _allScheduled = searchResults.where((news) => news['is_scheduled'] == true).toList();
+    _filteredNews = searchResults.where((news) => news['is_scheduled'] != true).toList();
+
+    // 3. Urutkan _allScheduled (Jadwal Mendatang)
+    // Aturan: Tanggal terdekat dengan hari ini di paling atas (Ascending)
+    _allScheduled.sort((a, b) {
+      DateTime? dateA = _parseDate(a['date']);
+      DateTime? dateB = _parseDate(b['date']);
+
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1;  // Item tanpa tanggal ditaruh di bawah
+      if (dateB == null) return -1;
+
+      return dateA.compareTo(dateB); // Ascending
+    });
+
+    // 4. Urutkan _filteredNews (Berita/Artikel Biasa)
+    // Aturan: Tanggal terbaru/paling update di paling atas (Descending)
     _filteredNews.sort((a, b) {
       DateTime? dateA = _parseDate(a['date']);
       DateTime? dateB = _parseDate(b['date']);
 
       if (dateA == null && dateB == null) return 0;
-      if (dateA == null) return 1; // news tanpa tanggal tetap di bawah
-      if (dateB == null) return -1; // news tanpa tanggal tetap di bawah
+      if (dateA == null) return 1;  // Item tanpa tanggal ditaruh di bawah
+      if (dateB == null) return -1;
 
-      // --- PERUBAHAN DI SINI ---
-      // Urutkan berdasarkan tanggal terbaru (descending/menurun)
-      // dengan membalik urutan perbandingan.
-      return dateB.compareTo(dateA);
+      return dateB.compareTo(dateA); // Descending (dateB duluan)
     });
 
-    if (_searchTerm.isEmpty && _selectedTags.isEmpty) {
-      _forceShowList = false;
+    if (isFilterActive) {
+      // Jika hasil Berita kosong, tapi Jadwal ada isinya -> Pindah otomatis ke Jadwal
+      if (_filteredNews.isEmpty && _allScheduled.isNotEmpty) {
+        _activeSection = 'scheduled';
+      }
+      // Sebaliknya, jika Jadwal kosong, tapi Berita ada isinya -> Pindah ke Berita
+      else if (_allScheduled.isEmpty && _filteredNews.isNotEmpty) {
+        _activeSection = 'news';
+      }
     }
 
-    print("Filtered news length: ${_filteredNews.length}");
+    if (!isFilterActive) {
+      _forceShowList = false;
+      // Opsional: Kembalikan ke tab default jika filter dihapus semua
+      _activeSection = 'news';
+    }
+
+    if (kDebugMode) {
+      print("Scheduled news length: ${_allScheduled.length}");
+      print("Filtered news length: ${_filteredNews.length}");
+      print("Active Section: $_activeSection"); // Cek di log pindah ke mana
+    }
 
     notifyListeners();
   }
@@ -237,12 +352,66 @@ class AniNewsProvider with ChangeNotifier {
         };
       }).toList();
 
-      // Set<String> tagSet = newsWithId
-      //     .map((event) => event['area']?.toString() ?? '')
-      //     .where((area) => area.isNotEmpty)
-      //     .toSet();
+      Set<String> tagSet = {};
+      Set<String> genreSet = {};
+      for (var news in newsWithId) {
+        if (news['tags'] != null) {
+          tagSet.addAll((news['tags'] as List).map((e) => e.toString()));
+        }
+        if (news['genres'] != null) {
+          genreSet.addAll((news['genres'] as List).map((e) => e.toString()));
+        }
+      }
+      _tags = tagSet.toList();
+      _genres = genreSet.toList();
 
       _allNews = newsWithId;
+
+      DateTime now = DateTime.now();
+      // Kuartal saat ini: Jan-Mar (0), Apr-Jun (1), Jul-Sep (2), Okt-Des (3)
+      int currentQuarter = (now.month - 1) ~/ 3;
+      int currentScore = (now.year * 4) + currentQuarter;
+
+      _tags.sort((a, b) {
+        int scoreA = _getSeasonScore(a);
+        int scoreB = _getSeasonScore(b);
+
+        bool isSeasonA = scoreA != -1;
+        bool isSeasonB = scoreB != -1;
+
+        // Prioritas 1: Tag Musim selalu di atas tag biasa
+        if (isSeasonA && !isSeasonB) return -1;
+        if (!isSeasonA && isSeasonB) return 1;
+
+        // Prioritas 2: Jika KEDUANYA adalah Tag Musim
+        if (isSeasonA && isSeasonB) {
+          bool aIsPast = scoreA < currentScore; // Apakah ini musim lalu?
+          bool bIsPast = scoreB < currentScore;
+
+          // Jika A masa lalu dan B masa sekarang/depan -> B ditarik ke atas
+          if (aIsPast && !bIsPast) return 1;
+          if (!aIsPast && bIsPast) return -1;
+
+          // Jika KEDUANYA masa sekarang/depan -> Urutkan secara kronologis (Menaik)
+          // Contoh: Winter 2026 -> Spring 2026 -> Summer 2026
+          if (!aIsPast && !bIsPast) {
+            return scoreA.compareTo(scoreB);
+          }
+
+          // Jika KEDUANYA masa lalu -> Urutkan terbalik (Menurun)
+          // Agar masa lalu yang paling dekat (misal: Fall 2025) ada di atas masa lalu yang jauh (Spring 2024)
+          if (aIsPast && bIsPast) {
+            return scoreB.compareTo(scoreA);
+          }
+        }
+
+        // Prioritas 3: Tag biasa diurutkan sesuai abjad (A-Z)
+        return a.compareTo(b);
+      });
+
+      // (Opsional) Urutkan genre sesuai abjad agar rapi
+      _genres.sort((a, b) => a.compareTo(b));
+
       // _tags = tagSet.toList();
       _isLoading = false;
       notifyListeners();

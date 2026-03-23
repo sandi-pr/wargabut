@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../../models/menu_item_model.dart';
+import '../../../provider/aninews_provider.dart';
+import '../../../provider/event_provider.dart';
+import '../../../provider/konser_provider.dart';
+import '../shared/shared_sponsor_section.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool isDesktop;
@@ -34,8 +39,18 @@ class AppDrawer extends StatelessWidget {
       child: Column(
         children: [
           _buildHeader(activeMenu.headerImage),
-          ...menuItems.map((m) => _buildMenuTile(context, m)),
-          const Spacer(),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: menuItems.map((m) => _buildMenuTile(context, m)).toList(),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+            child: SharedSponsorSection(
+              displayType: SponsorDisplayType.logo, // <--- Panggil tipe Logo
+            ),
+          ),
           const Divider(),
           _buildAuthSection(context),
         ],
@@ -81,11 +96,18 @@ class AppDrawer extends StatelessWidget {
   Widget _buildMenuTile(BuildContext context, MenuItemModel menu) {
     final isSelected = menu.route == currentRoute;
 
+    void resetAllFilters(BuildContext context) {
+      context.read<AniNewsProvider>().clearFilters();
+      context.read<EventProvider>().clearFilters();
+      context.read<KonserProvider>().clearFilters();
+    }
+
     return ListTile(
       title: Text(menu.label),
       subtitle: Text(menu.subtitle),
       selected: isSelected,
       onTap: () {
+        resetAllFilters(context);
         if (!isSelected) context.pushReplacement(menu.route);
 
         if (!isDesktop) Navigator.pop(context);

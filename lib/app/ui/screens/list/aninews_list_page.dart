@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:wargabut/app/provider/aninews_provider.dart';
 
 import '../../../provider/auth_provider.dart';
-import '../../../provider/event_provider.dart';
-import '../../../provider/location_provider.dart';
+import '../../../provider/aninews_provider.dart';
 import '../../../provider/theme_provider.dart';
-import '../../components/drawer/app_drawer.dart';
 import '../../components/tile/aninews_list_tile.dart';
-import '../../components/tile/event_list_tile.dart';
-import '../../../config/app_menus.dart';
 
-// 1. UBAH MENJADI STATELESSWIDGET
-// Semua state sekarang dikelola oleh Provider, jadi widget ini tidak perlu state lagi.
+// SHARED COMPONENTS
+import '../../components/shared/list_page_config.dart';
+import '../../components/shared/responsive_list_scaffold.dart';
+import '../../components/shared/generic_filter_sheet.dart';
+import '../../components/shared/shared_filter_segments.dart';
+import '../../components/shared/shared_grid_result.dart';
+import '../../components/shared/shared_admin_fab.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+
 class AniNewsListPage extends StatefulWidget {
   const AniNewsListPage({super.key});
 
@@ -24,349 +24,294 @@ class AniNewsListPage extends StatefulWidget {
 }
 
 class _AniNewsListPageState extends State<AniNewsListPage> {
-  // 1. Buat satu instance FocusNode di sini.
   final FocusNode _searchFocusNode = FocusNode();
+
+  // Asumsi Anda punya ListPageConfig.aniNews, jika belum, buat di list_page_config.dart
+  // title: 'AniChekku', searchHint: 'Cari berita...', drawerRoute: '/anichekku'
+  final config = ListPageConfig.aniNews;
 
   @override
   void dispose() {
-    // 2. Penting! Buang FocusNode saat widget tidak lagi digunakan untuk mencegah memory leak.
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Ambil semua provider yang dibutuhkan di sini.
-    final newsProvider = context.watch<AniNewsProvider>();
-    final authProvider = context.watch<AuthProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
+  void _handleFilterChange(Set<String> newSelection, BuildContext context) {
+    final provider = context.read<AniNewsProvider>();
+    final oldSelection = {
+      if (provider.selectedTags.isNotEmpty) 'Tag',
+      if (provider.selectedGenres.isNotEmpty) 'Genre',
+    };
 
-    // Cek ukuran layar untuk layout responsif
-    final bool isDesktop = MediaQuery.of(context).size.width > 900;
-
-    // --- LAYOUT DESKTOP ---
-    if (isDesktop) {
-      return Scaffold(
-        // 1. Tidak ada appBar atau drawer di level Scaffold utama untuk desktop
-        floatingActionButton: _buildFloatingActionButton(context, authProvider),
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 2. Drawer permanen di kiri, akan otomatis mengisi tinggi layar
-            SizedBox(
-              width: 250, // Lebar drawer tetap
-              child: _buildDrawer(context, authProvider, true),
-            ),
-
-            // 3. Kolom konten utama di tengah
-            Expanded(
-              flex: 5, // Beri ruang lebih besar untuk konten utama
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // 4. AppBar sekarang menjadi widget pertama di dalam kolom ini,
-                  //    bukan properti Scaffold.
-                  _buildAppBar(context, themeProvider, newsProvider),
-
-                  // 5. Sisa konten (filter dan list) harus di dalam Expanded
-                  //    agar bisa di-scroll dengan benar.
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: !newsProvider.isFilterActive
-                              ? _buildWelcomeView(context, isDesktop)
-                              : _buildFilteredResults(context, newsProvider, isDesktop),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+    // Hapus
+    final removed = oldSelection.difference(newSelection);
+    for (var f in removed) {
+      if (f == 'Tag') provider.setSelectedTags([]);
+      if (f == 'Genre') provider.setSelectedGenres([]);
     }
 
-    // --- LAYOUT MOBILE ---
-    // Layout untuk mobile tetap sama seperti sebelumnya, karena sudah benar.
-    return Scaffold(
-      appBar: _buildAppBar(context, themeProvider, newsProvider),
-      drawer: _buildDrawer(context, authProvider, false),
-      floatingActionButton: _buildFloatingActionButton(context, authProvider),
-      body: Column(
+    // Tambah
+    final added = newSelection.difference(oldSelection);
+    if (added.isNotEmpty) {
+      FocusScope.of(context).unfocus();
+      final type = added.first;
+      _showFilterSheet(context, type);
+    }
+  }
+
+  void _showFilterSheet(BuildContext context, String type) {
+    final provider = context.read<AniNewsProvider>();
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+
+    final isTag = type == 'Tag';
+    final sourceList = isTag ? provider.tags : provider.genres;
+    final currentSelection = isTag ? provider.selectedTags : provider.selectedGenres;
+
+    final content = GenericFilterSheet(
+      filterType: type,
+      sourceList: sourceList,
+      currentSelection: currentSelection,
+      onApply: (val) {
+        if (isTag) {
+          provider.setSelectedTags(val);
+        } else {
+          provider.setSelectedGenres(val);
+        }
+      },
+    );
+
+    if (isDesktop) {
+      showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+              content: SizedBox(width: 400, height: 400, child: content)
+          )
+      );
+    } else {
+      showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => DraggableScrollableSheet(
+              expand: false, initialChildSize: 0.6, maxChildSize: 0.9,
+              builder: (_, __) => content
+          )
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final newsProvider = context.watch<AniNewsProvider>();
+    final authProvider = context.watch<AuthProvider>();
+
+    final searchController = TextEditingController(text: newsProvider.searchTerm);
+    searchController.selection = TextSelection.fromPosition(TextPosition(offset: searchController.text.length));
+
+    // Menentukan data aktif berdasarkan activeSection (Berita vs Jadwal)
+    final bool isShowingScheduled = newsProvider.activeSection == 'scheduled';
+    final activeData = isShowingScheduled ? newsProvider.allScheduled : newsProvider.filteredNews;
+
+    return ResponsiveListScaffold(
+      title: config.title,
+      searchHint: config.searchHint,
+      drawerCurrentRoute: config.drawerRoute,
+      searchController: searchController,
+      searchFocusNode: _searchFocusNode,
+      onSearchSubmitted: (val) => context.read<AniNewsProvider>().setSearchTerm(val),
+      onClearSearch: () => context.read<AniNewsProvider>().clearFilters(),
+
+      floatingActionButton: SharedAdminFab(
+        isAdmin: authProvider.isAdmin,
+        onRefresh: () => context.read<AniNewsProvider>().fetchData(forceRefresh: true),
+        onAdd: () => context.push('/anichekku/baru'),
+      ),
+
+      bodyContent: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Filter Segments (Disesuaikan agar menampilkan "Tag" dan "Genre")
+          SharedFilterSegments(
+            isFilter1Selected: newsProvider.selectedTags.isNotEmpty,
+            isFilter2Selected: newsProvider.selectedGenres.isNotEmpty,
+
+            // Timpa tulisan Lokasi & Bulan dengan Tag & Genre
+            filter1Label: 'Tag',
+            filter1Value: 'Tag',
+            filter1Icon: Icons.local_offer_outlined, // Icon Tag
+
+            filter2Label: 'Genre',
+            filter2Value: 'Genre',
+            filter2Icon: Icons.category_outlined,    // Icon Kategori/Genre
+
+            onSelectionChanged: (val) => _handleFilterChange(val, context),
+          ),
           const SizedBox(height: 8.0),
+
           Expanded(
-            child: newsProvider.isFilterActive
-                ? _buildFilteredResults(context, newsProvider, isDesktop)
-                : _buildWelcomeView(context, isDesktop),
+            child: !newsProvider.isFilterActive
+                ? _AniNewsWelcomeView(isDesktop: MediaQuery.of(context).size.width > 900, config: config)
+                : SharedGridResult(
+              isLoading: newsProvider.isLoading,
+              data: activeData,
+              config: config,
+              onClearFilter: () => newsProvider.clearFilters(),
+              itemBuilder: (_, item) => AniNewsListTile(data: item),
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  // --- BAGIAN-BAGIAN UI DIPISAH MENJADI METHOD/WIDGET KECIL ---
-  PreferredSizeWidget _buildAppBar(BuildContext context, ThemeProvider themeProvider, AniNewsProvider newsProvider) {
-    return AppBar(
-      titleSpacing: 0.0,
-      surfaceTintColor: Colors.transparent,
-      title: Center(
-        child: Container(
-          constraints: const BoxConstraints(
-            maxWidth: 700, // <-- ANDA BISA SESUAIKAN LEBAR MAKSIMUM INI
-          ),
-          child: SearchBar(
-            key: Key(newsProvider.searchTerm), // Key untuk mereset text saat provider berubah
-            controller: TextEditingController(text: newsProvider.searchTerm),
-            // 3. Hubungkan FocusNode yang sudah kita buat ke SearchBar
-            focusNode: _searchFocusNode,
-            hintText: 'Cari berita...',
-            shadowColor: WidgetStateColor.resolveWith((s) => Colors.transparent),
-            padding: const WidgetStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: 16.0)),
-            onSubmitted: (value) => context.read<AniNewsProvider>().setSearchTerm(value),
-            onTapOutside: (_) => FocusScope.of(context).unfocus(),
-            leading: const Icon(Icons.search),
-            trailing: <Widget>[
-              if (newsProvider.searchTerm.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => context.read<AniNewsProvider>().clearFilters(),
-                )
-              else
-                Tooltip(
-                  message: 'Ubah tema',
-                  child: IconButton(
-                    isSelected: themeProvider.isDark,
-                    onPressed: themeProvider.toggleTheme,
-                    icon: const Icon(Icons.wb_sunny_outlined),
-                    selectedIcon: const Icon(Icons.brightness_2_outlined),
-                  ),
-                )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+// ==========================================
+// WIDGET LOKAL: WELCOME VIEW KHUSUS ANINEWS
+// ==========================================
+class _AniNewsWelcomeView extends StatelessWidget {
+  final bool isDesktop;
+  final ListPageConfig config; // 1. Tambahkan config ke constructor
 
-  Widget _buildDrawer(BuildContext context, AuthProvider authProvider, bool isDesktop) {
-    // Widget Drawer yang sesungguhnya kita simpan dalam satu variabel
-    final drawerContent = AppDrawer(
-      isDesktop: isDesktop,
-      currentRoute: "/anichekku",
-      menuItems: appMenus,
-      isLoggedIn: authProvider.isLoggedIn,
-      onLogout: authProvider.isLoggedIn ? authProvider.signOut : null,
-      onLogin: !authProvider.isLoggedIn ? () => context.push('/login') : null,
-    );
+  const _AniNewsWelcomeView({
+    required this.isDesktop,
+    required this.config, // Wajib diisi saat memanggil widget ini
+  });
 
-    // Jika ini adalah tampilan desktop, bungkus dengan Container yang memiliki border
-    if (isDesktop) {
-      return Container(
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant,
-              width: 1.0,
-            ),
-          ),
-        ),
-        child: drawerContent,
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    final newsProvider = context.watch<AniNewsProvider>();
 
-    // Jika mobile, kembalikan Drawer seperti biasa
-    return drawerContent;
-  }
-
-  Widget _buildFloatingActionButton(BuildContext context, AuthProvider authProvider) {
-    if (!authProvider.isAdmin) return const SizedBox.shrink();
-
-    return SpeedDial(
-      animatedIcon: AnimatedIcons.menu_close,
-      children: [
-        SpeedDialChild(
-          child: const Icon(Icons.refresh),
-          label: 'Refresh News',
-          onTap: () => context.read<AniNewsProvider>().fetchData(forceRefresh: true),
-        ),
-        SpeedDialChild(
-          child: const Icon(Icons.add),
-          label: 'Add News',
-          onTap: () => context.push('/anichekku/baru'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFilteredResults(BuildContext context, AniNewsProvider newsProvider, bool isDesktop) {
-    if (newsProvider.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (newsProvider.filteredNews.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.search_off, size: 64, color: Colors.grey),
-            const Text('Berita Tidak Ditemukan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('Coba ubah kata kunci Anda.', textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => context.read<AniNewsProvider>().clearFilters(),
-              child: const Text('Hapus Semua Filter'),
-            )
-          ],
-        ),
-      );
-    }
-
-    // Gunakan MasonryGridView untuk desktop, ListView untuk mobile
-    if (isDesktop) {
-      return MasonryGridView.count(
-        crossAxisCount: MediaQuery.of(context).size.width < 1200 ? 1 : 2,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 80.0),
-        itemCount: newsProvider.filteredNews.length,
-        itemBuilder: (context, index) {
-          final event = newsProvider.filteredNews[index];
-          return AniNewsListTile(data: event); // Widget card Anda
-        },
-      );
-    } else {
-      return ListView.builder(
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 80.0),
-        itemCount: newsProvider.filteredNews.length,
-        itemBuilder: (context, index) {
-          final event = newsProvider.filteredNews[index];
-          return AniNewsListTile(data: event);
-        },
-      );
-    }
-  }
-
-  Widget _buildWelcomeView(BuildContext context, bool isDesktop) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 80.0),
       child: Column(
         children: [
-          // Bagian Card "Temukan Event Menarik!" Anda (tidak berubah)
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 470,
-              ),
-              child: const Stack(
-                children: [
-                  // if (!isDesktop)
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: Image(
-                            width: 150,
-                            image: AssetImage('assets/images/wargabut_mascot_chibi.png')),
-                      ),
-                    ),
-                  Column(
-                    children: [
-                      SizedBox(height: 130),
-                      Card(
-                        elevation: 2,
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Temukan Berita Anime Terbaru!',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Update anime, movie, dan serial yang akan tayang — semuanya di AniChekku.',
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          )
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          _buildBanner(context), // 2. Kirim context agar bisa membaca ThemeProvider
+
+          if (newsProvider.upcomingScheduled.isNotEmpty)
+            _buildSection(
+              context: context,
+              title: config.upcomingSectionTitle, // Ambil dari config
+              data: newsProvider.upcomingScheduled,
+              onSeeAll: () => context.read<AniNewsProvider>().showFullList('scheduled'),
             ),
-          ),
-          _buildNearestEventsSection(context, isDesktop),
+
+          if (newsProvider.latestNews.isNotEmpty)
+            _buildSection(
+              context: context,
+              title: config.nearestSectionTitle, // Ambil dari config
+              data: newsProvider.latestNews,
+              onSeeAll: () => context.read<AniNewsProvider>().showFullList('news'),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildNearestEventsSection(BuildContext context, bool isDesktop) {
-    // Gunakan 'read' karena kita hanya perlu data saat ini, tidak perlu rebuild jika berubah di sini
-    final newsProvider = context.read<AniNewsProvider>();
+  // --- FUNGSI BUILD BANNER ---
+  Widget _buildBanner(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>(); // Untuk cek isDark
 
-    final nearestEvents = newsProvider.nearestEvents;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 470),
+        child: Stack(
+          children: [
+            // 1. Gambar Background Banner Kiri
+            Align(
+              alignment: Alignment.topLeft,
+              child: Image(
+                image: AssetImage(
+                    themeProvider.isDark ? config.bannerMenuPageDark : config.bannerMenuPage
+                ),
+              ),
+            ),
 
-    if (nearestEvents.isEmpty) {
-      return const SizedBox.shrink(); // Jangan tampilkan apa-apa jika tidak ada event sama sekali
-    }
+            // 2. Mascot Kanan Atas
+            Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Image(
+                  width: 150,
+                  image: AssetImage(config.mascotAsset),
+                ),
+              ),
+            ),
 
+            // 3. Info Card
+            SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const SizedBox(height: 130),
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          Text(
+                              config.welcomeTitle,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                              config.welcomeSubtitle,
+                              textAlign: TextAlign.center
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- FUNGSI BUILD SECTION ---
+  Widget _buildSection({
+    required BuildContext context,
+    required String title,
+    required List<Map<String, dynamic>> data,
+    required VoidCallback onSeeAll,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Berita Terbaru",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          // Gunakan ListView yang tidak bisa di-scroll di dalam SingleChildScrollView
-
-          isDesktop ?
-          MasonryGridView.count(
+          isDesktop
+              ? MasonryGridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: MediaQuery.of(context).size.width < 1200 ? 1 : 2,
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
-            itemCount: nearestEvents.length,
-            itemBuilder: (context, index) {
-              final event = nearestEvents[index];
-              return AniNewsListTile(data: event); // Widget card Anda
-            },
-          ) :
-          ListView.builder(
-            itemCount: nearestEvents.length,
-            shrinkWrap: true, // Penting agar ListView tidak mengambil tinggi tak terbatas
-            physics: const NeverScrollableScrollPhysics(), // Matikan scroll untuk ListView ini
-            itemBuilder: (context, index) {
-              final event = nearestEvents[index];
-              // Gunakan widget list tile Anda yang sudah ada
-              return AniNewsListTile(data: event);
-            },
+            itemCount: data.length,
+            itemBuilder: (_, index) => AniNewsListTile(data: data[index]),
+          )
+              : ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: data.length,
+            itemBuilder: (_, index) => AniNewsListTile(data: data[index]),
           ),
           const SizedBox(height: 16),
           Center(
             child: ElevatedButton(
-              onPressed: () {
-                // Panggil method baru di provider, tidak lagi menggunakan setState
-                context.read<AniNewsProvider>().showFullList();
-              },
-              child: const Text("Lihat Semua Berita"),
+              onPressed: onSeeAll,
+              child: Text("Lihat Semua ${title.split(' ').first}"), // Cerdas: Mengambil kata pertama (misal: "Lihat Semua Anime" / "Lihat Semua Berita")
             ),
           ),
         ],
       ),
     );
   }
-
 }

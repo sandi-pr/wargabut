@@ -164,11 +164,12 @@ class _EventListPageState extends State<EventListPage> {
       ),
 
       bodyContent: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // MENGGUNAKAN SHARED COMPONENT SEGMENTS
           SharedFilterSegments(
-            isLocationSelected: eventProvider.selectedAreas.isNotEmpty,
-            isMonthSelected: eventProvider.selectedMonths.isNotEmpty,
+            isFilter1Selected: eventProvider.selectedAreas.isNotEmpty,
+            isFilter2Selected: eventProvider.selectedMonths.isNotEmpty,
             onSelectionChanged: (val) => _handleFilterChange(val, context),
           ),
           const SizedBox(height: 8.0),
@@ -181,6 +182,7 @@ class _EventListPageState extends State<EventListPage> {
               upcomingEvents: eventProvider.nearestEvents,
               onSeeAllUpcoming: () => eventProvider.showFullList(),
               itemBuilder: (_, item) => EventListTile(data: item),
+              isSponsorView: true,
             )
             // MENGGUNAKAN SHARED COMPONENT GRID RESULT
                 : SharedGridResult(
