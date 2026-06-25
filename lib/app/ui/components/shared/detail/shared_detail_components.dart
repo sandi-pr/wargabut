@@ -125,7 +125,7 @@ class _DetailInfoCardState extends State<DetailInfoCard> {
         if (sideText != null && sideText.isNotEmpty)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.secondaryContainer, borderRadius: BorderRadius.circular(8)),
             child: Text(sideText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
           ),
       ],
@@ -355,7 +355,7 @@ class _NewsInfoCardState extends State<NewsInfoCard> {
                 // Tags
                 if (tags.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text("Tag:", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(widget.data['is_scheduled'] ? "Musim:" : "Tag:", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: 8,

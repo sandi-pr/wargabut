@@ -113,7 +113,7 @@ class SharedWelcomeView<T> extends StatelessWidget {
           if (isSponsorView = true) ...[
             const SizedBox(height: 40),
             const SharedSponsorSection(
-              displayType: SponsorDisplayType.banner, // <--- Panggil tipe Banner
+              displayType: SponsorDisplayType.poster, // <--- Panggil tipe Banner
             ),
           ],
         ],

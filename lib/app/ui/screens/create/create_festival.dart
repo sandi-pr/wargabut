@@ -44,7 +44,7 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
   @override
   void initState() {
     super.initState();
-    getGuestStars();
+    // getGuestStars();
     _addRundown(); // mulai dengan 1 rundown
   }
 

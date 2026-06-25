@@ -715,6 +715,8 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
       return "TransJakarta";
     } else if (lowerAgency.contains("angkot")) {
       return "Angkot";
+    } else if (lowerAgency.contains("trem")) {
+      return "LRT";
     }
 
     // Hilangkan "PT.", "PT", atau titik di awal jika ada

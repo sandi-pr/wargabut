@@ -5,6 +5,16 @@ import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class TransitService {
+  static String _getVehicleType(String agencyName, String vehicleType) {
+    print("agencyName: $agencyName, vehicleType: $vehicleType");
+    if (agencyName.startsWith("Angkot")) return "Angkot";
+    if (agencyName.startsWith("PT Transportasi Jakarta")) return "Bus";
+    if (agencyName.startsWith("Kereta")) return "Kereta";
+    if (vehicleType == "TRAM") return "LRT";
+    if (vehicleType == "SUBWAY" && agencyName.contains("MRT Jakarta")) return "MRT Jakarta";
+    return agencyName;
+  }
+
   static Future<List<Map<String, dynamic>>> getTransitDetails(
     double latOrigin,
     double lngOrigin,
@@ -57,24 +67,20 @@ class TransitService {
 
       List<Map<String, dynamic>> transitSteps = [];
 
-      // if (kDebugMode) {
-      //   print("=========================================");
-      //   print("cek data: ${json.encode(data)}");
-      //   print("=========================================");
-      // }
+      if (kDebugMode) {
+        print("=========================================");
+        print("cek data: ${json.encode(data)}");
+        print("=========================================");
+      }
 
       // Iterasi melalui semua rute yang tersedia
       for (var route in data["routes"]) {
         for (var leg in route["legs"]) {
           for (var step in leg["steps"]) {
-            // if (kDebugMode) {
-            //   print("=========================================");
-            //   print("cek step: $step");
-            //   print("=========================================");
-            // }
             // Menangani langkah transit
             if (step.containsKey("transitDetails")) {
               var transit = step["transitDetails"];
+              String agencyName = transit["transitLine"]["agencies"][0]["name"];
 
               transitSteps.add({
                 "type": "TRANSIT",
@@ -85,37 +91,29 @@ class TransitService {
                 "arrivalTime": transit["localizedValues"]["arrivalTime"]["time"]
                     ["text"],
                 "codeLine": transit["transitLine"]["nameShort"],
-                "agency": transit["transitLine"]["agencies"][0]["name"],
+                "colorLine": transit["transitLine"]["color"],
                 "line": transit["transitLine"]["name"],
                 "headsign": transit["headsign"],
-                "vehicle": transit["transitLine"]["vehicle"]["name"]["text"],
+                "agency": agencyName,
+                "vehicle": _getVehicleType(agencyName, transit["transitLine"]["vehicle"]["type"]),
                 "stopCount": transit["stopCount"],
+                "duration": step["localizedValues"]?["staticDuration"]?["text"],
+                "durationSeconds": int.tryParse(
+                        step["staticDuration"]?.toString().replaceAll('s', '') ??
+                            '0') ??
+                    0,
+                "transitDetails": transit,
                 "navigationInstruction":
                     step.containsKey("navigationInstruction")
                         ? step["navigationInstruction"]["instructions"]
                         : null
               });
             }
-            // Menangani langkah berjalan (WALK)
-            // else if (step["travelMode"] == "WALK") {
-            //   Map<String, dynamic> walkStep = {
-            //     "type": "WALK",
-            //     "distance": step["localizedValues"]["distance"]["text"],
-            //     "duration": step["localizedValues"]["staticDuration"]["text"]
-            //   };
-            //
-            //   if (step.containsKey("navigationInstruction") &&
-            //       step["navigationInstruction"] is Map &&
-            //       step["navigationInstruction"].containsKey("instructions") &&
-            //       step["navigationInstruction"]["instructions"] != null) {
-            //     walkStep["navigationInstruction"] = step["navigationInstruction"]["instructions"];
-            //   }
-            //
-            //   transitSteps.add(walkStep);
-            // }
           }
         }
       }
+
+      print("transitSteps: ${json.encode(transitSteps)}");
 
       return transitSteps;
     } catch (e) {

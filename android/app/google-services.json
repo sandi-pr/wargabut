@@ -58,6 +58,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "825512861147-pmsm696pda2o8fj9krq2e5l1ind9hsco.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "id.wargabut.app",
+            "certificate_hash": "09c8ba3be80b0d1dfb712f6f4a465e32fb8398c1"
+          }
+        },
+        {
           "client_id": "825512861147-j61fo9iu3r3i9651j6dk8bd61jjevheq.apps.googleusercontent.com",
           "client_type": 3
         }

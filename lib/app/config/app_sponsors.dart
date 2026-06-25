@@ -1,22 +1,25 @@
 class SponsorConfig {
-  final String bannerUrl; // Gambar panjang untuk Welcome View
-  final String logoUrl;   // Gambar kotak/bulat untuk Sidebar
+  final String bannerUrl;
+  final String logoUrl;
+  final String? posterUrl; // [BARU] Tambahkan properti opsional untuk poster tegak
   final String linkUrl;
 
   const SponsorConfig({
     required this.bannerUrl,
     required this.logoUrl,
+    this.posterUrl, // Opsional (tidak pakai required)
     required this.linkUrl,
   });
 }
 
 // DAFTAR SPONSOR ANDA
 const List<SponsorConfig> activeSponsors = [
-  SponsorConfig(
-    bannerUrl: 'assets/images/banner-squid_rentcos.jpg',
-    logoUrl: 'assets/images/logo-squid_rentcos.png', // Ganti dengan nama file logo Anda
-    linkUrl: 'https://www.instagram.com/squid_rentcos',
-  ),
+  // SponsorConfig(
+  //   bannerUrl: 'assets/images/banner-squid_rentcos.jpg',
+  //   logoUrl: 'assets/images/logo-squid_rentcos.png', // Ganti dengan nama file logo Anda
+  //   posterUrl: 'assets/images/kawan_cosplay-collab.jpg',
+  //   linkUrl: 'https://www.instagram.com/p/DXtp9-qFGyZ',
+  // ),
   // Coba hilangkan komen di bawah ini untuk melihat efek 2 sponsor sejajar:
   // SponsorConfig(
   //   bannerUrl: 'assets/images/banner-sponsor2.jpg',

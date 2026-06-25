@@ -404,23 +404,43 @@ class EventProvider with ChangeNotifier {
   Future<void> geocodeAllEventsOnce({
     Duration delay = const Duration(milliseconds: 1200),
   }) async {
+    // --- Variabel Tracking ---
+    int successCount = 0;
+    int failCount = 0;
+    int skipCount = 0;
+
+    debugPrint('=== MEMULAI PROSES GEOCODING MASAL ===');
+    debugPrint('Total Event yang akan dicek: ${_allEvents.length}');
+
     for (final event in _allEvents) {
       final hasLat = event['lat'] != null;
       final hasLng = event['lng'] != null;
-
-      if (hasLat && hasLng) continue;
-
-      final location = event['location'];
       final eventId = event['id'];
+      final location = event['location'];
 
-      if (location == null || location.toString().isEmpty) continue;
+      // 1. Skip jika koordinat sudah ada
+      if (hasLat && hasLng) {
+        skipCount++;
+        continue; // Tidak perlu print di sini agar log tidak terlalu penuh
+      }
+
+      // 2. Skip jika lokasi kosong
+      if (location == null || location.toString().isEmpty) {
+        debugPrint('⚠️ [SKIP] ID: $eventId | Alasan: Nama lokasi kosong/null');
+        skipCount++;
+        continue;
+      }
 
       try {
-        final coords =
-        await GeocodingService.getLatLngFromLocationName(location);
+        final coords = await GeocodingService.getLatLngFromLocationName(location);
 
-        if (coords == null) continue;
+        if (coords == null) {
+          debugPrint('❌ [GAGAL] ID: $eventId | Lokasi: $location | Alasan: Return dari API null');
+          failCount++;
+          continue;
+        }
 
+        // Update ke Firestore
         await FirebaseFirestore.instance
             .collection('jfestchart')
             .doc(eventId)
@@ -433,13 +453,25 @@ class EventProvider with ChangeNotifier {
         event['lat'] = coords.latitude;
         event['lng'] = coords.longitude;
 
-        // Delay agar aman dari rate limit
+        // 3. Catat Keberhasilan
+        debugPrint('✅ [SUKSES] ID: $eventId | Lokasi: $location -> Lat: ${coords.latitude}, Lng: ${coords.longitude}');
+        successCount++;
+
+        // Delay agar aman dari rate limit (hanya delay jika hit API)
         await Future.delayed(delay);
+
       } catch (e) {
-        debugPrint(
-            '[GEOCODE ERROR] eventId=$eventId location=$location => $e');
+        // 4. Catat Kegagalan dari API / Jaringan
+        failCount++;
+        debugPrint('❌ [ERROR] ID: $eventId | Lokasi: $location => $e');
       }
     }
+
+    // --- Cetak Ringkasan Hasil ---
+    debugPrint('=== PROSES GEOCODING SELESAI ===');
+    debugPrint('✅ Sukses: $successCount event di-update');
+    debugPrint('❌ Gagal: $failCount event gagal dicarikan koordinatnya');
+    debugPrint('⏭️ Di-skip: $skipCount event (sudah punya koordinat / lokasi kosong)');
 
     notifyListeners();
   }

@@ -18,6 +18,8 @@ import '../../components/shared/shared_filter_segments.dart';
 import '../../components/shared/shared_grid_result.dart';
 import '../../components/shared/shared_welcome_view.dart';
 import '../../components/shared/shared_admin_fab.dart';
+import 'package:wargabut/app/ui/components/event_card.dart';
+import 'package:wargabut/app/ui/screens/create/crawl_events.dart';
 
 
 class EventListPage extends StatefulWidget {
@@ -160,6 +162,12 @@ class _EventListPageState extends State<EventListPage> {
         onGeocode: () async {
           // Logic geocode pindah sini atau tetap di page, terserah Anda
           await context.read<EventProvider>().geocodeAllEventsOnce();
+        },
+        onCrawl: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CrawlEventsPage()),
+          );
         },
       ),
 

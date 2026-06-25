@@ -7,9 +7,15 @@ import 'package:wargabut/app/provider/event_provider.dart';
 import 'package:wargabut/app/services/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' show parse;
+import 'dart:convert';
+import 'package:firebase_ai/firebase_ai.dart';
+import 'package:wargabut/app/ui/screens/create/crawl_events.dart';
 
 class CreateEventPage extends StatefulWidget {
-  const CreateEventPage({super.key});
+  final String? initialUrl;
+  const CreateEventPage({super.key, this.initialUrl});
 
   @override
   State<CreateEventPage> createState() => _CreateEventPageState();
@@ -23,6 +29,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final _areaController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _ticketPriceController = TextEditingController();
+
+  final _linkController = TextEditingController();
+  bool _isLoadingScrape = false;
 
   String _htmType = 'free';
 
@@ -43,8 +52,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
   @override
   void initState() {
     super.initState();
-    getGuestStars();
+    // getGuestStars();
     _addRundown(); // mulai dengan 1 rundown
+
+    if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
+      _linkController.text = widget.initialUrl!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _autoFillFromLink();
+      });
+    }
   }
 
   void _addRundown() {
@@ -272,6 +288,216 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
+  Future<void> _autoFillFromLink() async {
+    final url = _linkController.text.trim();
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Masukkan URL terlebih dahulu!')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoadingScrape = true;
+    });
+
+    try {
+      // Menggunakan Firebase Cloud Function pribadi untuk menghindari block CORS di production
+      final proxyUrl = 'https://us-central1-wargabut-11.cloudfunctions.net/proxy?url=${Uri.encodeComponent(url)}';
+      final response = await http.get(Uri.parse(proxyUrl));
+
+      if (response.statusCode != 200) {
+        throw Exception('Gagal mengambil data dari URL. Status: ${response.statusCode}');
+      }
+
+      // Pre-process HTML agar tag <br> dan <p> dikonversi menjadi newline (\n)
+      // sebelum tag HTML-nya dihapus oleh parser.
+      String htmlContent = response.body;
+      htmlContent = htmlContent.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+      htmlContent = htmlContent.replaceAll(RegExp(r'</p>', caseSensitive: false), '\n\n');
+      htmlContent = htmlContent.replaceAll(RegExp(r'</div>', caseSensitive: false), '\n');
+
+      // Extract plain text from HTML
+      final document = parse(htmlContent);
+      
+      // Coba cari URL poster dari metadata OG Image (menggunakan response asli)
+      final rawDoc = parse(response.body);
+      String? posterUrl;
+      
+      // Prioritas 1: Gambar yang path-nya spesifik event (seperti di ruangcosplay)
+      final eventImg = rawDoc.querySelector('img[src*="/images/event/"]');
+      final ogImage = rawDoc.querySelector('meta[property="og:image"]');
+      
+      print('=== DEBUG eventImg ditemukan: ${eventImg != null} ===');
+      print('=== DEBUG ogImage ditemukan: ${ogImage != null} ===');
+
+      if (eventImg != null) {
+        posterUrl = eventImg.attributes['src'];
+        print('=== DEBUG MENGGUNAKAN PRIORITAS 1 (eventImg): $posterUrl ===');
+      } else if (ogImage != null) {
+        // Prioritas 2: Open Graph Image
+        posterUrl = ogImage.attributes['content'];
+        print('=== DEBUG MENGGUNAKAN PRIORITAS 2 (ogImage): $posterUrl ===');
+      } else {
+        // Prioritas 3: Fallback mencari gambar pertama
+        final img = rawDoc.querySelector('img');
+        if (img != null) {
+          posterUrl = img.attributes['src'];
+          print('=== DEBUG MENGGUNAKAN PRIORITAS 3 (fallback img): $posterUrl ===');
+        } else {
+          print('=== DEBUG TIDAK ADA GAMBAR SAMA SEKALI DI HTML ===');
+        }
+      }
+      
+      // Jika URL relatif, jadikan absolut
+      if (posterUrl != null && !posterUrl.startsWith('http')) {
+        posterUrl = Uri.parse(url).resolve(posterUrl).toString();
+      }
+      
+      // Mengubah resolusi gambar ruangcosplay dari medium (/md/) ke large (/lg/)
+      if (posterUrl != null && posterUrl!.contains('/images/event/') && posterUrl!.contains('/md/')) {
+        posterUrl = posterUrl!.replaceAll('/md/', '/lg/');
+      }
+      
+      print('=== DEBUG POSTER URL DITEMUKAN: $posterUrl ===');
+
+      final rawText = document.body?.text ?? htmlContent;
+      
+      // Bersihkan spasi horizontal, tapi biarkan newline (\n)
+      String cleanText = rawText.replaceAll(RegExp(r'[ \t]+'), ' ');
+      // Rapatkan newline yang terlalu banyak menjadi maksimal 2 newline berurutan
+      cleanText = cleanText.replaceAll(RegExp(r'\n\s*\n'), '\n\n').trim();
+
+      // Ensure it's not too long for the model prompt
+      final textToProcess = cleanText.length > 40000 ? cleanText.substring(0, 40000) : cleanText;
+
+      final model = FirebaseAI.googleAI().generativeModel(model: 'gemini-3.5-flash');
+      final prompt = '''
+Ekstrak detail event dari teks berikut ke dalam format JSON yang tepat. 
+Hanya kembalikan objek JSON tanpa formatting markdown (tanpa ```json ... ```), langsung mulai dengan { dan akhiri dengan }.
+
+Keys yang harus ada:
+- "event_name" (string)
+- "date" (string, WAJIB gunakan format tanggal dan bulan bahasa Indonesia. Contoh singkatan: Jan, Feb, Mar, Apr, Mei, Jun, Jul, Agu, Sep, Okt, Nov, Des. Jangan gunakan Oct, May, atau Aug)
+- "area" (string, HANYA nama Kota atau Kabupatennya saja tanpa nama provinsi, contoh: 'Jakarta', 'Malang', 'Bekasi')
+- "location" (string, tempat spesifik event DITAMBAH dengan nama Kota/Kabupatennya, contoh: 'Revo Mall, Bekasi' atau 'JIEXPO Kemayoran, Jakarta')
+- "description" (string, ambil secara LENGKAP seluruh isi deskripsi event tanpa dikurangi, dan pastikan mempertahankan format baris baru / paragraf menggunakan karakter "\\n")
+- "is_free" (boolean, true jika gratis, false jika berbayar)
+- "ticket_price" (string, harga tiket jika berbayar, atau string kosong jika gratis)
+
+Teks web:
+$textToProcess
+''';
+
+      final result = await model.generateContent([Content.text(prompt)]);
+      final jsonText = result.text?.trim() ?? '';
+      
+      // Clean potential markdown blocks just in case the AI still returns them
+      String cleanJson = jsonText;
+      if (cleanJson.startsWith('```json')) {
+        cleanJson = cleanJson.substring(7);
+      }
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.substring(3);
+      }
+      if (cleanJson.endsWith('```')) {
+        cleanJson = cleanJson.substring(0, cleanJson.length - 3);
+      }
+      cleanJson = cleanJson.trim();
+
+      final data = json.decode(cleanJson) as Map<String, dynamic>;
+
+      setState(() {
+        _eventNameController.text = data['event_name']?.toString() ?? '';
+        _dateEventController.text = data['date']?.toString() ?? '';
+        _areaController.text = data['area']?.toString() ?? '';
+        _locationController.text = data['location']?.toString() ?? '';
+        _descriptionController.text = data['description']?.toString() ?? '';
+        
+        final isFree = data['is_free'] == true;
+        _htmType = isFree ? 'free' : 'paid';
+        if (!isFree) {
+          _ticketPriceController.text = data['ticket_price']?.toString() ?? '';
+        } else {
+          _ticketPriceController.clear();
+        }
+      });
+
+      // Proses pengunduhan dan upload poster
+      if (posterUrl != null && posterUrl.isNotEmpty) {
+        try {
+          String extension = '.jpg';
+          if (posterUrl!.toLowerCase().contains('.webp')) extension = '.webp';
+          else if (posterUrl!.toLowerCase().contains('.png')) extension = '.png';
+
+          // Menggunakan wsrv.nl (Images weserv) yang memang khusus dirancang sebagai proxy dan 
+          // CDN cache untuk gambar (mendukung CORS dan tidak memblokir tipe konten).
+          final imageProxyUrl = 'https://wsrv.nl/?url=${Uri.encodeComponent(posterUrl!)}';
+          print('=== DEBUG MENGUNDUH POSTER DENGAN WSRV.NL: $imageProxyUrl ===');
+          final imageResponse = await http.get(Uri.parse(imageProxyUrl));
+          
+          print('=== DEBUG STATUS DOWNLOAD POSTER: ${imageResponse.statusCode} ===');
+          
+          if (imageResponse.statusCode == 200) {
+            print('=== DEBUG POSTER BERHASIL DIUNDUH (Size: ${imageResponse.bodyBytes.length} bytes), MEMULAI UPLOAD... ===');
+            final xFile = XFile.fromData(
+              imageResponse.bodyBytes,
+              name: 'poster_${DateTime.now().millisecondsSinceEpoch}$extension',
+            );
+            
+            final eventNameForStorage = _eventNameController.text.isNotEmpty 
+                ? _eventNameController.text 
+                : 'auto_event_${DateTime.now().millisecondsSinceEpoch}';
+
+            List<Map<String, dynamic>> uploadedPosters = await _storageService.uploadImages(
+              [xFile],
+              'jfestchart',
+              eventNameForStorage,
+            );
+            
+            if (uploadedPosters.isNotEmpty) {
+              print('=== DEBUG POSTER BERHASIL DIUPLOAD KE FIREBASE ===');
+              setState(() {
+                // Nonaktifkan is_main pada poster lain
+                for (var p in newPosters) {
+                  p['is_main'] = false;
+                }
+                uploadedPosters[0]['is_main'] = true;
+                newPosters.addAll(uploadedPosters);
+              });
+            } else {
+              print('=== DEBUG POSTER GAGAL DIUPLOAD (Hasil kosong) ===');
+            }
+          } else {
+            print('=== DEBUG GAGAL DOWNLOAD POSTER (RESPONSE BODY): ${imageResponse.body} ===');
+          }
+        } catch (e) {
+          print('=== DEBUG GAGAL PROSES POSTER (CATCH BLOCK): $e ===');
+        }
+      } else {
+        print('=== DEBUG POSTER URL KOSONG, SKIP PROSES UNDUH ===');
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Auto-Fill berhasil!')),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+      print('Gagal Auto-Fill: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal Auto-Fill: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingScrape = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -296,6 +522,41 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     children: [
                       Text("Detail Event", style: Theme.of(context).textTheme.headlineSmall),
                       const SizedBox(height: 8.0),
+                      // Auto-fill Section
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _linkController,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Paste Event URL (RuangCosplay, dll)',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.travel_explore),
+                            color: Theme.of(context).primaryColor,
+                            tooltip: 'Crawl Event RuangCosplay',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const CrawlEventsPage()),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _isLoadingScrape 
+                              ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())
+                              : ElevatedButton.icon(
+                                  onPressed: _autoFillFromLink,
+                                  icon: const Icon(Icons.auto_awesome),
+                                  label: const Text('Auto-Fill'),
+                                ),
+                        ],
+                      ),
+                      const SizedBox(height: 16.0),
                       TextField(
                         controller: _eventNameController,
                         decoration: const InputDecoration(
@@ -569,6 +830,41 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         flex: 3, // Lebih lebar dibanding daftar poster
                         child: Column(
                           children: [
+                            // Auto-fill Section
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _linkController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      labelText: 'Paste Event URL (RuangCosplay, dll)',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.travel_explore),
+                                  color: Theme.of(context).primaryColor,
+                                  tooltip: 'Crawl Event RuangCosplay',
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const CrawlEventsPage()),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                _isLoadingScrape 
+                                    ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())
+                                    : ElevatedButton.icon(
+                                        onPressed: _autoFillFromLink,
+                                        icon: const Icon(Icons.auto_awesome),
+                                        label: const Text('Auto-Fill'),
+                                      ),
+                              ],
+                            ),
+                            const SizedBox(height: 16.0),
                             TextField(
                               controller: _eventNameController,
                               decoration: const InputDecoration(

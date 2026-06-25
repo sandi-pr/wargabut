@@ -45,12 +45,12 @@ class AppDrawer extends StatelessWidget {
               children: menuItems.map((m) => _buildMenuTile(context, m)).toList(),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-            child: SharedSponsorSection(
-              displayType: SponsorDisplayType.logo, // <--- Panggil tipe Logo
-            ),
-          ),
+          // const Padding(
+          //   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          //   child: SharedSponsorSection(
+          //     displayType: SponsorDisplayType.logo, // <--- Panggil tipe Logo
+          //   ),
+          // ),
           const Divider(),
           _buildAuthSection(context),
         ],

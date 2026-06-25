@@ -45,6 +45,56 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
     super.initState();
   }
 
+  void _addGenre(String inputValue) {
+    if (inputValue.trim().isEmpty) return;
+
+    setState(() {
+      // Pecah teks berdasarkan koma (,)
+      List<String> rawGenres = inputValue.split(',');
+
+      for (String genre in rawGenres) {
+        // Bersihkan spasi berlebih
+        String cleanGenre = genre.trim();
+
+        // Masukkan jika tidak kosong dan belum ada di daftar
+        if (cleanGenre.isNotEmpty && !_genres.contains(cleanGenre)) {
+          // Opsional: Buat huruf pertamanya kapital agar selalu rapi di database
+          // cleanGenre = cleanGenre[0].toUpperCase() + cleanGenre.substring(1);
+
+          _genres.add(cleanGenre);
+        }
+      }
+    });
+
+    // Bersihkan kotak ketikan setelah ditambahkan
+    _genreController.clear();
+  }
+
+  void _addTag(String inputValue) {
+    if (inputValue.trim().isEmpty) return;
+
+    setState(() {
+      // 1. Pecah teks berdasarkan koma (,)
+      // "Action, Fantasy , Drama" -> ["Action", " Fantasy ", " Drama"]
+      List<String> rawTags = inputValue.split(',');
+
+      for (String tag in rawTags) {
+        // 2. Bersihkan spasi berlebih di awal dan akhir kata
+        String cleanTag = tag.trim();
+
+        // 3. Pastikan tag tidak kosong dan belum ada di dalam list (cegah duplikat)
+        if (cleanTag.isNotEmpty && !_tags.contains(cleanTag)) {
+          // Khusus untuk Tag Musim, Anda bisa opsional menambahkan logika
+          // untuk mengkapitalisasi huruf pertamanya di sini jika mau.
+          _tags.add(cleanTag);
+        }
+      }
+    });
+
+    // 4. Bersihkan TextField setelah tag berhasil masuk
+    _tagController.clear();
+  }
+
   String formatTimeOfDay(TimeOfDay tod) {
     final hour = tod.hour.toString().padLeft(2, '0');
     final minute = tod.minute.toString().padLeft(2, '0');
@@ -209,12 +259,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
             hintText: 'Contoh: Anime, Movie, Spring 2025',
           ),
           onSubmitted: (value) {
-            if (value.trim().isNotEmpty) {
-              setState(() {
-                _tags.add(value.trim());
-                _tagController.clear();
-              });
-            }
+            _addTag(value);
           },
         ),
         const SizedBox(height: 8),
@@ -245,16 +290,11 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
           controller: _genreController,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
-            labelText: 'Genre Anime',
-            hintText: 'Contoh: Action, Comedy, Romance',
+            labelText: 'Tag / Genre',
+            hintText: 'Contoh: Action, Fantasy, Isekai',
           ),
           onSubmitted: (value) {
-            if (value.trim().isNotEmpty) {
-              setState(() {
-                _genres.add(value.trim());
-                _genreController.clear();
-              });
-            }
+            _addGenre(value); // Panggil fungsi pintar kita di sini!
           },
         ),
         const SizedBox(height: 8),
@@ -281,7 +321,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Event'),
+        title: const Text('Add Anime News'),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),

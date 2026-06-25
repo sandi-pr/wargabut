@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../config/app_sponsors.dart'; // Sesuaikan path
 
-enum SponsorDisplayType { banner, logo }
+enum SponsorDisplayType { banner, logo, poster }
 
 class SharedSponsorSection extends StatelessWidget {
   final SponsorDisplayType displayType;
@@ -28,9 +28,11 @@ class SharedSponsorSection extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Sponsor',
-          style: TextStyle(
+        Text(
+          displayType == SponsorDisplayType.poster
+              ? 'Pengumuman Khusus'
+              : 'Sponsor',
+          style: const TextStyle(
             fontWeight: FontWeight.normal,
             fontSize: 14, // Ukuran font sedikit dikecilkan agar elegan
             color: Colors.grey,
@@ -38,12 +40,47 @@ class SharedSponsorSection extends StatelessWidget {
         ),
         const SizedBox(height: 12.0),
 
-        // Pengecekan tipe layout
         if (displayType == SponsorDisplayType.banner)
           _buildBannerLayout()
+        else if (displayType == SponsorDisplayType.poster)
+          _buildPosterLayout()
         else
           _buildLogoLayout(),
       ],
+    );
+  }
+
+  Widget _buildPosterLayout() {
+    // Saring hanya sponsor yang memiliki posterUrl
+    final posterSponsors = activeSponsors.where((s) => s.posterUrl != null).toList();
+
+    if (posterSponsors.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal, // Scroll ke samping
+      physics: const BouncingScrollPhysics(), // Efek pantulan yang halus
+      child: Row(
+        children: posterSponsors.map((sponsor) {
+          return Padding(
+            // Jarak antar poster
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: InkWell(
+              onTap: () => _launchUrl(sponsor.linkUrl),
+              borderRadius: BorderRadius.circular(12.0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12.0),
+                child: Image(
+                  // Batasi tinggi poster agar tidak menutupi seluruh layar HP
+                  height: 320,
+                  fit: BoxFit.cover,
+                  image: AssetImage(sponsor.posterUrl!),
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 

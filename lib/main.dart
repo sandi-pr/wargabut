@@ -33,6 +33,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:firebase_performance/firebase_performance.dart';
 
 // --- PUSAT KONFIGURASI APLIKASI ---
 

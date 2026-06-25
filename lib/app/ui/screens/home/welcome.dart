@@ -112,9 +112,9 @@ class _WelcomePageState extends State<WelcomePage> {
                   const SizedBox(height: 60),
 
                   // 3. SPONSOR SECTION
-                  const SharedSponsorSection(
-                    displayType: SponsorDisplayType.banner,
-                  ),
+                  // const SharedSponsorSection(
+                  //   displayType: SponsorDisplayType.poster,
+                  // ),
                   const SizedBox(height: 80),
                 ],
               ),
@@ -156,14 +156,14 @@ class _WelcomePageState extends State<WelcomePage> {
 
               // [DIUBAH] INI KUNCINYA: Berikan margin atas yang SANGAT BESAR
               // di desktop agar kepala Aoi-chan punya ruang dan tidak menabrak atap layar
-              margin: EdgeInsets.only(top: isDesktop ? 220.0 : 80.0),
+              margin: EdgeInsets.only(top: isDesktop ? 220.0 : 100.0),
 
               padding: EdgeInsets.only(
-                left: isDesktop ? 48.0 : 32.0,
-                top: isDesktop ? 48.0 : 32.0,
-                bottom: isDesktop ? 48.0 : 32.0,
+                left: isDesktop ? 48.0 : 24.0,
+                top: isDesktop ? 48.0 : 24.0,
+                bottom: isDesktop ? 48.0 : 24.0,
                 // Padding kanan pastikan cukup lebar
-                right: isDesktop ? 380.0 : 190.0,
+                right: isDesktop ? 380.0 : 160.0,
               ),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
@@ -176,10 +176,10 @@ class _WelcomePageState extends State<WelcomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Selamat Datang di Wargabut!',
+                    'Selamat Datang Wargabut!',
                     style: TextStyle(
                       // [DIUBAH] Font juga dibesarkan agar seimbang dengan kotak yang lebar
-                      fontSize: isDesktop ? 32 : 24,
+                      fontSize: isDesktop ? 32 : 20,
                       fontWeight: FontWeight.w900,
                       color: Theme.of(context).colorScheme.primary,
                       height: 1.2,
@@ -187,9 +187,9 @@ class _WelcomePageState extends State<WelcomePage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Pusat media hiburanmu.\nMau jelajah ke mana hari ini?',
+                    'Media Rekomendasi Hobi andalanmu!\nHari ini mau cari keseruan apa?',
                     style: TextStyle(
-                      fontSize: isDesktop ? 20 : 14,
+                      fontSize: isDesktop ? 20 : 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -200,7 +200,7 @@ class _WelcomePageState extends State<WelcomePage> {
             // 2. MASKOT
             Positioned(
               // Di desktop, geser sedikit menjauh dari tepi kanan agar lebih dinamis
-              right: isDesktop ? 40 : 16,
+              right: isDesktop ? 40 : 0,
               bottom: 0,
               child: ShaderMask(
                 shaderCallback: (Rect bounds) {

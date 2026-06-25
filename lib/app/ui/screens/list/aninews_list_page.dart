@@ -14,6 +14,7 @@ import '../../components/shared/generic_filter_sheet.dart';
 import '../../components/shared/shared_filter_segments.dart';
 import '../../components/shared/shared_grid_result.dart';
 import '../../components/shared/shared_admin_fab.dart';
+import '../create/crawl_ani_news.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 class AniNewsListPage extends StatefulWidget {
@@ -124,6 +125,12 @@ class _AniNewsListPageState extends State<AniNewsListPage> {
         isAdmin: authProvider.isAdmin,
         onRefresh: () => context.read<AniNewsProvider>().fetchData(forceRefresh: true),
         onAdd: () => context.push('/anichekku/baru'),
+        onCrawl: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CrawlAniNewsPage()),
+          );
+        },
       ),
 
       bodyContent: Column(

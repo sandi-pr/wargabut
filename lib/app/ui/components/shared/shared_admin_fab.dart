@@ -7,6 +7,7 @@ class SharedAdminFab extends StatelessWidget {
   final VoidCallback onAdd;
   // Opsional: jika mau tambah tombol lain di masa depan
   final VoidCallback? onGeocode;
+  final VoidCallback? onCrawl;
 
   const SharedAdminFab({
     super.key,
@@ -14,6 +15,7 @@ class SharedAdminFab extends StatelessWidget {
     required this.onRefresh,
     required this.onAdd,
     this.onGeocode,
+    this.onCrawl,
   });
 
   @override
@@ -39,6 +41,12 @@ class SharedAdminFab extends StatelessWidget {
           label: 'Tambah Baru',
           onTap: onAdd,
         ),
+        if (onCrawl != null)
+          SpeedDialChild(
+            child: const Icon(Icons.travel_explore),
+            label: 'Crawl Event Baru',
+            onTap: onCrawl,
+          ),
       ],
     );
   }

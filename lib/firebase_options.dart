@@ -70,6 +70,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '825512861147',
     projectId: 'wargabut-11',
     storageBucket: 'wargabut-11.appspot.com',
+    androidClientId: '825512861147-afb8t3udck6cstd9veejgtu3dvdvsiji.apps.googleusercontent.com',
+    iosClientId: '825512861147-572c7onn8si1vjj30cate8ghtgb7ift7.apps.googleusercontent.com',
     iosBundleId: 'com.example.wargabut',
   );
+
 }
