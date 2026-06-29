@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:wargabut/app/config/api_keys.dart';
 import 'package:wargabut/app/provider/aninews_provider.dart';
 import 'package:wargabut/app/services/firebase_storage.dart';
 
@@ -124,10 +126,63 @@ class _AniNewsDetailPageState extends State<AniNewsDetailPage> with AniNewsLogic
   }
 
   Future<void> _deleteNews() async {
+    // Hapus semua gambar terkait dari Firebase Storage
+    final List<dynamic> posters = _newsData?['posters'] ?? [];
+    for (var p in posters) {
+      if (p is Map && p['path'] != null) {
+        try {
+          await FirebaseStorage.instance.ref(p['path']).delete();
+        } catch (e) {
+          debugPrint('Error deleting image from storage: $e');
+        }
+      }
+    }
+
     await FirebaseFirestore.instance.collection(collectionName).doc(_newsData!['id']).delete();
     if (mounted) {
       context.read<AniNewsProvider>().fetchData(forceRefresh: true);
       context.go(routePrefix);
+    }
+  }
+
+  Future<void> _translateDescription() async {
+    final currentText = descriptionController.text.trim();
+    if (currentText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deskripsi kosong')));
+      return;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sedang menerjemahkan...')));
+    }
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: ApiKeys.geminiApiKey,
+      );
+      final prompt = '''
+Anda adalah penerjemah handal. Terjemahkan teks berikut ke dalam Bahasa Indonesia dengan gaya penulisan yang rapi dan menarik.
+Jika teks ini sudah dalam bahasa Indonesia, perbaiki tata bahasanya agar lebih enak dibaca.
+
+Teks:
+$currentText
+''';
+      final response = await model.generateContent([Content.text(prompt)]);
+      final translatedText = response.text?.trim() ?? '';
+
+      if (translatedText.isNotEmpty) {
+        setState(() {
+          descriptionController.text = translatedText;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Terjemahan berhasil!')));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menerjemahkan: $e')));
+      }
     }
   }
 
@@ -246,6 +301,7 @@ class _AniNewsDetailPageState extends State<AniNewsDetailPage> with AniNewsLogic
       onGenreAdded: (val) => setState(() => genres.add(val)),
       onGenreDeleted: (val) => setState(() => genres.remove(val)),
       onScheduledChanged: (val) => setState(() => isScheduled = val),
+      onTranslatePressed: _translateDescription,
     );
 
     // Kita tetap me-reuse DetailPosterManager!

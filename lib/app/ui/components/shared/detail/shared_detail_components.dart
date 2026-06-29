@@ -469,6 +469,7 @@ class NewsEditForm extends StatelessWidget {
   final Function(String) onGenreAdded;
   final Function(String) onGenreDeleted;
   final Function(bool) onScheduledChanged;
+  final VoidCallback? onTranslatePressed;
 
   const NewsEditForm({
     super.key,
@@ -485,6 +486,7 @@ class NewsEditForm extends StatelessWidget {
     required this.onGenreAdded,
     required this.onGenreDeleted,
     required this.onScheduledChanged,
+    this.onTranslatePressed,
   });
 
   @override
@@ -516,7 +518,21 @@ class NewsEditForm extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Deskripsi', border: OutlineInputBorder()), maxLines: 5),
+        Stack(
+          children: [
+            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Deskripsi', border: OutlineInputBorder()), maxLines: 5),
+            if (onTranslatePressed != null)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.translate, color: Colors.blue),
+                  onPressed: onTranslatePressed,
+                  tooltip: 'Translate to Indonesia',
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 16),
 
         SwitchListTile(

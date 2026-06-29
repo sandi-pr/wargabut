@@ -4,7 +4,8 @@ import 'package:html/parser.dart' show parse;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wargabut/app/ui/screens/create/create_event.dart';
 import 'dart:convert';
-import 'package:firebase_ai/firebase_ai.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:wargabut/app/config/api_keys.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:wargabut/app/services/firebase_storage.dart';
 import 'package:provider/provider.dart';
@@ -170,7 +171,10 @@ class _CrawlEventsPageState extends State<CrawlEventsPage> {
       _currentProcessIndex = 0;
     });
 
-    final model = FirebaseAI.googleAI().generativeModel(model: 'gemini-3.5-flash');
+    final model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: ApiKeys.geminiApiKey,
+    );
     final storageService = StorageService();
 
     for (int i = 0; i < newEvents.length; i++) {

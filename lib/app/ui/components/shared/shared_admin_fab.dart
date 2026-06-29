@@ -8,6 +8,10 @@ class SharedAdminFab extends StatelessWidget {
   // Opsional: jika mau tambah tombol lain di masa depan
   final VoidCallback? onGeocode;
   final VoidCallback? onCrawl;
+  final String? crawlLabel;
+  final VoidCallback? onCrawlScheduled;
+  final String? crawlScheduledLabel;
+  final VoidCallback? onDeleteBySeason;
 
   const SharedAdminFab({
     super.key,
@@ -16,6 +20,10 @@ class SharedAdminFab extends StatelessWidget {
     required this.onAdd,
     this.onGeocode,
     this.onCrawl,
+    this.crawlLabel,
+    this.onCrawlScheduled,
+    this.crawlScheduledLabel,
+    this.onDeleteBySeason,
   });
 
   @override
@@ -44,8 +52,21 @@ class SharedAdminFab extends StatelessWidget {
         if (onCrawl != null)
           SpeedDialChild(
             child: const Icon(Icons.travel_explore),
-            label: 'Crawl Event Baru',
+            label: crawlLabel ?? 'Crawl Data',
             onTap: onCrawl,
+          ),
+        if (onCrawlScheduled != null)
+          SpeedDialChild(
+            child: const Icon(Icons.calendar_month),
+            label: crawlScheduledLabel ?? 'Crawl Jadwal Tayang',
+            onTap: onCrawlScheduled,
+          ),
+        if (onDeleteBySeason != null)
+          SpeedDialChild(
+            child: const Icon(Icons.delete_sweep, color: Colors.white),
+            backgroundColor: Colors.red,
+            label: 'Hapus Berdasarkan Musim',
+            onTap: onDeleteBySeason,
           ),
       ],
     );

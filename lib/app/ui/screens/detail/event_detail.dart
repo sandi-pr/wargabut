@@ -153,6 +153,18 @@ class _EventDetailPageState extends State<EventDetailPage>
   }
 
   Future<void> _deleteEvent() async {
+    // Hapus semua gambar terkait dari Firebase Storage
+    final List<dynamic> posters = _eventData?['posters'] ?? [];
+    for (var p in posters) {
+      if (p is Map && p['path'] != null) {
+        try {
+          await FirebaseStorage.instance.ref(p['path']).delete();
+        } catch (e) {
+          debugPrint('Error deleting image from storage: $e');
+        }
+      }
+    }
+
     await FirebaseFirestore.instance
         .collection(collectionName)
         .doc(_eventData!['id'])

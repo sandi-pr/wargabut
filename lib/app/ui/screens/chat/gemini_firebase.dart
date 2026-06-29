@@ -10,7 +10,8 @@ import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flyer_chat_image_message/flyer_chat_image_message.dart';
 import 'package:flyer_chat_text_message/flyer_chat_text_message.dart';
 import 'package:flyer_chat_text_stream_message/flyer_chat_text_stream_message.dart';
-import 'package:firebase_ai/firebase_ai.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:wargabut/app/config/api_keys.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -90,17 +91,17 @@ class WGuidePageState extends State<WGuidePage> {
   final getEventListTool = FunctionDeclaration(
     'getEventList',
     'Ambil daftar seluruh event dari Firestore collection jfestchart.',
-    parameters: {},
+    Schema.object(properties: {}),
   );
 
   final getEventDetailTool = FunctionDeclaration(
     'getEventDetail',
     'Ambil detail satu event berdasarkan Firestore document ID.',
-    parameters: {
+    Schema.object(properties: {
       'eventId': Schema.string(
         description: 'ID dokumen event di Firestore collection jfestchart.',
       ),
-    },
+    }),
   );
 
 
@@ -113,11 +114,11 @@ class WGuidePageState extends State<WGuidePage> {
       chunkAnimationDuration: _kChunkAnimationDuration,
     );
 
-    _model = FirebaseAI.googleAI().generativeModel(
-      model: 'gemini-2.5-pro',
+    _model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: ApiKeys.geminiApiKey,
       tools: [
-        Tool.googleSearch(),
-        Tool.functionDeclarations([
+        Tool(functionDeclarations: [
           getEventListTool,
           getEventDetailTool,
         ]),

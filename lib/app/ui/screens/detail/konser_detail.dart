@@ -253,6 +253,18 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
     final messenger = ScaffoldMessenger.of(context);
     final router = GoRouter.of(context);
     try {
+      // Hapus semua gambar terkait dari Firebase Storage
+      final List<dynamic> posters = _eventData?['posters'] ?? [];
+      for (var p in posters) {
+        if (p is Map && p['path'] != null) {
+          try {
+            await FirebaseStorage.instance.ref(p['path']).delete();
+          } catch (e) {
+            debugPrint('Error deleting image from storage: $e');
+          }
+        }
+      }
+
       await FirebaseFirestore.instance
           .collection('dfestkonser')
           .doc(_eventData!['id']) // Gunakan _eventData

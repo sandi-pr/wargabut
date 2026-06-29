@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../../provider/auth_provider.dart';
 import '../../../provider/aninews_provider.dart';
@@ -15,6 +17,7 @@ import '../../components/shared/shared_filter_segments.dart';
 import '../../components/shared/shared_grid_result.dart';
 import '../../components/shared/shared_admin_fab.dart';
 import '../create/crawl_ani_news.dart';
+import '../create/crawl_scheduled_anime.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 class AniNewsListPage extends StatefulWidget {
@@ -100,6 +103,135 @@ class _AniNewsListPageState extends State<AniNewsListPage> {
     }
   }
 
+  void _showDeleteBySeasonDialog(BuildContext context) {
+    final newsProvider = context.read<AniNewsProvider>();
+    final scheduledAnimes = newsProvider.allScheduled;
+
+    // Kumpulkan semua musim unik dari tags
+    final Set<String> uniqueSeasons = {};
+    for (var anime in scheduledAnimes) {
+      if (anime['tags'] is List) {
+        uniqueSeasons.addAll((anime['tags'] as List).map((e) => e.toString()));
+      }
+    }
+
+    final List<String> availableSeasons = uniqueSeasons.toList()..sort();
+
+    if (availableSeasons.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada jadwal tayang anime atau musim ditemukan.')),
+      );
+      return;
+    }
+
+    String? selectedSeason = availableSeasons.first;
+    bool isDeleting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Hapus Anime Berdasarkan Musim'),
+              content: isDeleting
+                  ? const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Sedang menghapus anime dan gambar dari server...'),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Pilih musim anime jadwal tayang yang ingin Anda hapus masal:'),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: selectedSeason,
+                          isExpanded: true,
+                          items: availableSeasons.map((season) {
+                            return DropdownMenuItem(value: season, child: Text(season));
+                          }).toList(),
+                          onChanged: (val) {
+                            setStateDialog(() {
+                              selectedSeason = val;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'PERINGATAN: Aksi ini tidak dapat dibatalkan. Semua gambar dan dokumen anime pada musim ini akan dihapus permanen.',
+                          style: TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ],
+                    ),
+              actions: isDeleting
+                  ? []
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text('Batal'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                        onPressed: () async {
+                          if (selectedSeason == null) return;
+                          
+                          setStateDialog(() {
+                            isDeleting = true;
+                          });
+
+                          try {
+                            final animesToDelete = scheduledAnimes.where((anime) {
+                              return anime['tags'] is List && (anime['tags'] as List).contains(selectedSeason);
+                            }).toList();
+
+                            for (var anime in animesToDelete) {
+                              // 1. Hapus gambar dari Storage
+                              final List<dynamic> posters = anime['posters'] ?? [];
+                              for (var p in posters) {
+                                if (p is Map && p['path'] != null) {
+                                  try {
+                                    await FirebaseStorage.instance.ref(p['path']).delete();
+                                  } catch (e) {
+                                    debugPrint('Gagal hapus gambar storage: $e');
+                                  }
+                                }
+                              }
+                              // 2. Hapus dokumen Firestore
+                              await FirebaseFirestore.instance.collection('anichekku').doc(anime['id']).delete();
+                            }
+
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext); // Tutup dialog
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Berhasil menghapus ${animesToDelete.length} anime musim $selectedSeason!')),
+                              );
+                              // Refresh list
+                              newsProvider.fetchData(forceRefresh: true);
+                            }
+                          } catch (e) {
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Terjadi kesalahan: $e')),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Hapus Semua'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final newsProvider = context.watch<AniNewsProvider>();
@@ -125,12 +257,21 @@ class _AniNewsListPageState extends State<AniNewsListPage> {
         isAdmin: authProvider.isAdmin,
         onRefresh: () => context.read<AniNewsProvider>().fetchData(forceRefresh: true),
         onAdd: () => context.push('/anichekku/baru'),
+        crawlLabel: 'Crawl Berita Anime',
         onCrawl: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const CrawlAniNewsPage()),
           );
         },
+        crawlScheduledLabel: 'Crawl Jadwal Anime',
+        onCrawlScheduled: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CrawlScheduledAnimePage()),
+          );
+        },
+        onDeleteBySeason: () => _showDeleteBySeasonDialog(context),
       ),
 
       bodyContent: Column(

@@ -659,14 +659,19 @@ class KonserProvider with ChangeNotifier {
       await initLocalStorage();
       localStorage.clear();
       _filterEvents();
+      Object? customEncode(dynamic item) {
+        if (item is Timestamp) return item.toDate().toIso8601String();
+        return item;
+      }
+
       if (kIsWeb) {
         await initLocalStorage();
-        localStorage.setItem('cachedKonsers', jsonEncode(_allEvents));
+        localStorage.setItem('cachedKonsers', jsonEncode(_allEvents, toEncodable: customEncode));
         localStorage.setItem('cachedKonserAreas', jsonEncode(_areas));
         localStorage.setItem(
             'lastFetchFestTime', DateTime.now().millisecondsSinceEpoch.toString());
       } else {
-        await prefs.setString('cachedKonsers', jsonEncode(_allEvents));
+        await prefs.setString('cachedKonsers', jsonEncode(_allEvents, toEncodable: customEncode));
         await prefs.setStringList('cachedKonserAreas', _areas);
         await prefs.setInt(
             'lastFetchFestTime', DateTime.now().millisecondsSinceEpoch);

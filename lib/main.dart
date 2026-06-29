@@ -29,7 +29,7 @@ import 'app/ui/screens/detail/ani_news_detail.dart';
 import 'app/ui/screens/detail/konser_detail.dart';
 import 'app/ui/screens/list/konser_list_page.dart';
 import 'firebase_options.dart';
-import 'package:firebase_ai/firebase_ai.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';

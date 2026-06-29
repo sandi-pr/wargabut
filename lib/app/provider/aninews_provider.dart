@@ -418,13 +418,18 @@ class AniNewsProvider with ChangeNotifier {
       await initLocalStorage();
       localStorage.clear();
       _filterNews();
+      Object? customEncode(dynamic item) {
+        if (item is Timestamp) return item.toDate().toIso8601String();
+        return item;
+      }
+
       if (kIsWeb) {
         await initLocalStorage();
-        localStorage.setItem('cachedAnichekku', jsonEncode(_allNews));
+        localStorage.setItem('cachedAnichekku', jsonEncode(_allNews, toEncodable: customEncode));
         localStorage.setItem(
             'lastFetchAniTime', DateTime.now().millisecondsSinceEpoch.toString());
       } else {
-        await prefs.setString('cachedAnichekku', jsonEncode(_allNews));
+        await prefs.setString('cachedAnichekku', jsonEncode(_allNews, toEncodable: customEncode));
         await prefs.setInt(
             'lastFetchAniTime', DateTime.now().millisecondsSinceEpoch);
       }

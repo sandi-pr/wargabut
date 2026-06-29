@@ -691,14 +691,19 @@ class EventProvider with ChangeNotifier {
       await initLocalStorage();
       localStorage.clear();
       _filterEvents();
+      Object? customEncode(dynamic item) {
+        if (item is Timestamp) return item.toDate().toIso8601String();
+        return item;
+      }
+
       if (kIsWeb) {
         await initLocalStorage();
-        localStorage.setItem('cachedEvents', jsonEncode(_allEvents));
+        localStorage.setItem('cachedEvents', jsonEncode(_allEvents, toEncodable: customEncode));
         localStorage.setItem('cachedAreas', jsonEncode(_areas));
         localStorage.setItem(
             'lastFetchTime', DateTime.now().millisecondsSinceEpoch.toString());
       } else {
-        await prefs.setString('cachedEvents', jsonEncode(_allEvents));
+        await prefs.setString('cachedEvents', jsonEncode(_allEvents, toEncodable: customEncode));
         await prefs.setStringList('cachedAreas', _areas);
         await prefs.setInt(
             'lastFetchTime', DateTime.now().millisecondsSinceEpoch);

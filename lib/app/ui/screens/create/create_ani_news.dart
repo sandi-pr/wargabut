@@ -27,6 +27,11 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
   final List<String> _tags = [];
   final List<String> _genres = [];
 
+  // Tambahan Field Information dari Jikan API
+  final _studiosController = TextEditingController();
+  final _typeController = TextEditingController();
+  final _premieredController = TextEditingController();
+
   List<Map<String, dynamic>> newPosters = [];
 
   bool _isScheduled = false;
@@ -207,13 +212,15 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
       }
 
       try {
-        // 4. Gunakan .set() untuk menyimpan data dengan ID kustom
         await eventRef.set({
           'title': titleNews,
           'date': _dateController.text,
           'desc': _descriptionController.text,
           'tags': _tags,
           'genres': _genres,
+          'studios': _studiosController.text.isNotEmpty ? _studiosController.text.split(',').map((e) => e.trim()).toList() : [],
+          'type': _typeController.text,
+          'premiered': _premieredController.text,
           'is_postered': newPosters.isNotEmpty,
           'posters': [],
           'is_scheduled': _isScheduled,
@@ -377,6 +384,18 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
 
                 const SizedBox(height: 16),
 
+                // Tambahan Field Info
+                TextField(controller: _studiosController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Studios (pisahkan koma)')),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: _typeController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Type (TV, Movie)'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(controller: _premieredController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Premiered (Misal: Summer 2026)'))),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
                 // Deskripsi
                 TextField(
                   controller: _descriptionController,
@@ -473,6 +492,18 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                             const SizedBox(height: 16),
 
                             _buildGenreInput(),
+                            const SizedBox(height: 16),
+
+                            // Tambahan Field Info untuk Desktop
+                            TextField(controller: _studiosController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Studios (pisahkan koma)')),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(child: TextField(controller: _typeController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Type (TV, Movie)'))),
+                                const SizedBox(width: 8),
+                                Expanded(child: TextField(controller: _premieredController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Premiered (Misal: Summer 2026)'))),
+                              ],
+                            ),
                             const SizedBox(height: 16),
 
                             TextField(

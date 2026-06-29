@@ -3,7 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' show parse;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
-import 'package:firebase_ai/firebase_ai.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:wargabut/app/config/api_keys.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:wargabut/app/services/firebase_storage.dart';
 import 'package:provider/provider.dart';
@@ -75,6 +76,11 @@ class _CrawlAniNewsPageState extends State<CrawlAniNewsPage> {
         final titleElem = card.querySelector('p.title a') ?? card.querySelector('a.title');
         String url = titleElem?.attributes['href'] ?? '';
         String title = titleElem?.text.trim() ?? 'No Title';
+        
+        final lowerTitle = title.toLowerCase();
+        if (lowerTitle.contains('erotica') || lowerTitle.contains('boys love') || lowerTitle.contains('hentai') || lowerTitle.contains('yaoi') || lowerTitle.contains('yuri') || lowerTitle.contains('girls love')) {
+          continue; // Skip restricted news
+        }
         
         final dateElem = card.querySelector('.information') ?? card.querySelector('.info');
         String date = dateElem?.text.trim().split('by').first.trim() ?? ''; // Sederhanakan tulisan author dll
@@ -172,7 +178,10 @@ class _CrawlAniNewsPageState extends State<CrawlAniNewsPage> {
       _currentProcessIndex = 0;
     });
 
-    final model = FirebaseAI.googleAI().generativeModel(model: 'gemini-3.5-flash');
+    final model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: ApiKeys.geminiApiKey,
+    );
     final storageService = StorageService();
 
     for (int i = 0; i < newEvents.length; i++) {

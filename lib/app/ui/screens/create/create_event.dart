@@ -10,7 +10,8 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' show parse;
 import 'dart:convert';
-import 'package:firebase_ai/firebase_ai.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:wargabut/app/config/api_keys.dart';
 import 'package:wargabut/app/ui/screens/create/crawl_events.dart';
 
 class CreateEventPage extends StatefulWidget {
@@ -371,7 +372,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
       // Ensure it's not too long for the model prompt
       final textToProcess = cleanText.length > 40000 ? cleanText.substring(0, 40000) : cleanText;
 
-      final model = FirebaseAI.googleAI().generativeModel(model: 'gemini-3.5-flash');
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: ApiKeys.geminiApiKey,
+      );
       final prompt = '''
 Ekstrak detail event dari teks berikut ke dalam format JSON yang tepat. 
 Hanya kembalikan objek JSON tanpa formatting markdown (tanpa ```json ... ```), langsung mulai dengan { dan akhiri dengan }.
