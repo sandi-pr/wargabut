@@ -1,5 +1,4 @@
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
@@ -104,6 +103,7 @@ class _AniNewsDetailPageState extends State<AniNewsDetailPage> with AniNewsLogic
     await FirebaseFirestore.instance.collection(collectionName).doc(_newsData!['id']).update({
       'title': titleController.text,
       'date': dateController.text,
+      'air_time': airTimeController.text.trim(),
       'desc': descriptionController.text,
       'tags': tags,
       'genres': genres,
@@ -116,6 +116,7 @@ class _AniNewsDetailPageState extends State<AniNewsDetailPage> with AniNewsLogic
         // Update local state agar view mode langsung berubah
         _newsData!['title'] = titleController.text;
         _newsData!['date'] = dateController.text;
+        _newsData!['air_time'] = airTimeController.text.trim();
         _newsData!['desc'] = descriptionController.text;
         _newsData!['tags'] = tags;
         _newsData!['genres'] = genres;
@@ -156,32 +157,51 @@ class _AniNewsDetailPageState extends State<AniNewsDetailPage> with AniNewsLogic
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sedang menerjemahkan...')));
     }
 
-    try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: ApiKeys.geminiApiKey,
-      );
-      final prompt = '''
+    final candidateModels = [
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+      'gemini-2.0-flash-lite',
+      'gemini-2.5-flash',
+    ];
+
+    String? translatedText;
+    String lastError = '';
+
+    for (final modelName in candidateModels) {
+      try {
+        final model = GenerativeModel(
+          model: modelName,
+          apiKey: ApiKeys.geminiApiKey,
+        );
+        final prompt = '''
 Anda adalah penerjemah handal. Terjemahkan teks berikut ke dalam Bahasa Indonesia dengan gaya penulisan yang rapi dan menarik.
 Jika teks ini sudah dalam bahasa Indonesia, perbaiki tata bahasanya agar lebih enak dibaca.
 
 Teks:
 $currentText
 ''';
-      final response = await model.generateContent([Content.text(prompt)]);
-      final translatedText = response.text?.trim() ?? '';
-
-      if (translatedText.isNotEmpty) {
-        setState(() {
-          descriptionController.text = translatedText;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Terjemahan berhasil!')));
+        final response = await model.generateContent([Content.text(prompt)]);
+        final text = response.text?.trim() ?? '';
+        if (text.isNotEmpty) {
+          translatedText = text;
+          break;
         }
+      } catch (e) {
+        lastError = e.toString();
+        debugPrint('Model $modelName error: $e');
       }
-    } catch (e) {
+    }
+
+    if (translatedText != null && translatedText.isNotEmpty) {
+      setState(() {
+        descriptionController.text = translatedText!;
+      });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menerjemahkan: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Terjemahan berhasil!')));
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menerjemahkan: $lastError')));
       }
     }
   }
@@ -290,6 +310,7 @@ $currentText
     final formWidget = NewsEditForm(
       titleCtrl: titleController,
       dateCtrl: dateController,
+      airTimeCtrl: airTimeController,
       descCtrl: descriptionController,
       tagCtrl: tagController,
       genreCtrl: genreController,

@@ -269,16 +269,16 @@ class _TemplateCardState extends State<TemplateCard> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Tanggal
-                      if (widget.data['date'] != null && widget.data['date'].toString().trim().isNotEmpty)
-                        Row(
-                          children: [
+                      // Tanggal & Members
+                      Row(
+                        children: [
+                          if (widget.data['date'] != null && widget.data['date'].toString().trim().isNotEmpty) ...[
                             Icon(
                                 Icons.calendar_today_outlined,
                                 size: 14,
                                 color: Theme.of(context).colorScheme.outline
                             ),
-                            const SizedBox(width: 6.0),
+                            const SizedBox(width: 4.0),
                             Text(
                               widget.data['date'],
                               style: TextStyle(
@@ -288,9 +288,59 @@ class _TemplateCardState extends State<TemplateCard> {
                               ),
                             ),
                           ],
-                        )
-                      else
-                        const SizedBox(), // Placeholder jika tidak ada tanggal
+                          if (widget.data['air_time'] != null && widget.data['air_time'].toString().trim().isNotEmpty) ...[
+                            const SizedBox(width: 6.0),
+                            Icon(
+                              Icons.access_time,
+                              size: 13,
+                              color: Colors.blue.shade600,
+                            ),
+                            const SizedBox(width: 2.0),
+                            Text(
+                              widget.data['air_time'].toString(),
+                              style: TextStyle(
+                                color: Colors.blue.shade600,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                          if (widget.data['air_time'] != null && widget.data['air_time'].toString().trim().isNotEmpty) ...[
+                            const SizedBox(width: 6.0),
+                            Icon(
+                              Icons.access_time,
+                              size: 13,
+                              color: Colors.blue.shade600,
+                            ),
+                            const SizedBox(width: 2.0),
+                            Text(
+                              widget.data['air_time'].toString(),
+                              style: TextStyle(
+                                color: Colors.blue.shade600,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                          if (widget.data['members_formatted'] != null || widget.data['members'] != null) ...[
+                            const SizedBox(width: 8.0),
+                            Icon(
+                              Icons.person_outline,
+                              size: 15,
+                              color: Colors.blue.shade700,
+                            ),
+                            const SizedBox(width: 2.0),
+                            Text(
+                              widget.data['members_formatted']?.toString() ?? '${widget.data['members']}',
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontSize: 12.0,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
 
                       // Badge Musim (Terpisah di kanan)
                       if (_getSeasonTag() != null)
@@ -394,16 +444,16 @@ class _TemplateCardState extends State<TemplateCard> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Tanggal
-                    if (widget.data['date'] != null && widget.data['date'].toString().trim().isNotEmpty)
-                      Row(
-                        children: [
+                    // Tanggal & Members
+                    Row(
+                      children: [
+                        if (widget.data['date'] != null && widget.data['date'].toString().trim().isNotEmpty) ...[
                           Icon(
                               Icons.calendar_today_outlined,
                               size: 14,
                               color: Theme.of(context).colorScheme.outline
                           ),
-                          const SizedBox(width: 6.0),
+                          const SizedBox(width: 4.0),
                           Text(
                             widget.data['date'],
                             style: TextStyle(
@@ -413,9 +463,25 @@ class _TemplateCardState extends State<TemplateCard> {
                             ),
                           ),
                         ],
-                      )
-                    else
-                      const SizedBox(), // Placeholder jika tidak ada tanggal
+                        if (widget.data['members_formatted'] != null || widget.data['members'] != null) ...[
+                          const SizedBox(width: 8.0),
+                          Icon(
+                            Icons.person_outline,
+                            size: 15,
+                            color: Colors.blue.shade700,
+                          ),
+                          const SizedBox(width: 2.0),
+                          Text(
+                            widget.data['members_formatted']?.toString() ?? '${widget.data['members']}',
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 12.0,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
 
                     // Badge Musim (Terpisah di kanan)
                     if (_getSeasonTag() != null)

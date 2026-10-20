@@ -8,6 +8,7 @@ mixin AniNewsLogicMixin<T extends StatefulWidget> on State<T> {
   // --- CONTROLLERS ---
   final titleController = TextEditingController();
   final dateController = TextEditingController();
+  final airTimeController = TextEditingController();
   final descriptionController = TextEditingController();
 
   final tagController = TextEditingController();
@@ -21,6 +22,7 @@ mixin AniNewsLogicMixin<T extends StatefulWidget> on State<T> {
   void dispose() {
     titleController.dispose();
     dateController.dispose();
+    airTimeController.dispose();
     descriptionController.dispose();
     tagController.dispose();
     genreController.dispose();
@@ -31,6 +33,7 @@ mixin AniNewsLogicMixin<T extends StatefulWidget> on State<T> {
   void loadInitialData(Map<String, dynamic> data) {
     titleController.text = data['title'] ?? '';
     dateController.text = data['date'] ?? '';
+    airTimeController.text = data['air_time']?.toString() ?? data['jam_tayang']?.toString() ?? '';
     descriptionController.text = data['desc'] ?? '';
     isScheduled = data['is_scheduled'] ?? false;
 

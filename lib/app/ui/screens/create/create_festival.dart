@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +9,11 @@ import 'package:wargabut/app/provider/konser_provider.dart';
 import 'package:wargabut/app/services/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' show parse;
+import 'dart:convert';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:wargabut/app/config/api_keys.dart';
 
 class CreateKonserPage extends StatefulWidget {
   const CreateKonserPage({super.key});
@@ -24,6 +30,9 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
   final _areaController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _ticketPriceController = TextEditingController();
+
+  final _linkController = TextEditingController();
+  bool _isLoadingScrape = false;
 
   String _htmType = 'free';
 
@@ -273,6 +282,452 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
     }
   }
 
+  void _showPosterPreview(String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header dengan judul dan tombol close
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
+            ),
+            // Gambar preview dengan zoom
+            Flexible(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                            SizedBox(height: 8),
+                            Text('Gagal memuat gambar', style: TextStyle(color: Colors.white54)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _autoFillFromLink() async {
+    final url = _linkController.text.trim();
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Masukkan URL terlebih dahulu!')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoadingScrape = true;
+    });
+
+    try {
+      final isInstagram = url.contains('instagram.com') || url.contains('instagr.am');
+      String targetFetchUrl = url;
+
+      if (isInstagram) {
+        final regExp = RegExp(r'(?:instagram\.com|instagr\.am)/(?:p|reel|tv)/([A-Za-z0-9_-]+)');
+        final match = regExp.firstMatch(url);
+        if (match != null) {
+          final shortcode = match.group(1);
+          targetFetchUrl = 'https://www.instagram.com/p/$shortcode/embed/captioned/';
+        }
+      }
+
+      http.Response? response;
+
+      if (isInstagram) {
+        try {
+          print('=== DEBUG IG: Trying Direct GET with SSR User-Agent ===');
+          final directRes = await http.get(
+            Uri.parse(targetFetchUrl),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            },
+          );
+          if (directRes.statusCode == 200 && directRes.body.contains('EmbeddedMediaImage')) {
+            print('=== DEBUG IG: Direct GET Success! Found EmbeddedMediaImage ===');
+            response = directRes;
+          } else {
+            print('=== DEBUG IG: Direct GET status: ${directRes.statusCode}, size: ${directRes.body.length} ===');
+          }
+        } catch (e) {
+          print('=== DEBUG IG: Direct GET Exception: $e ===');
+        }
+      }
+
+      if (response == null) {
+        final proxyUrl = 'https://us-central1-wargabut-11.cloudfunctions.net/proxy?url=${Uri.encodeComponent(targetFetchUrl)}';
+        print('=== DEBUG: Fetching via Cloud Function Proxy: $proxyUrl ===');
+
+        // Retry otomatis hingga 3 kali jika Instagram embed merespons 500 / error sementara
+        final maxRetries = isInstagram ? 3 : 1;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            response = await http.get(Uri.parse(proxyUrl));
+            if (response.statusCode == 200 && response.body.contains('Caption')) {
+              print('=== DEBUG: Fetch proxy berhasil pada percobaan ke-$attempt ===');
+              break;
+            } else if (response.statusCode != 200) {
+              print('=== DEBUG: Percobaan ke-$attempt status ${response.statusCode}, mencoba ulang... ===');
+            }
+          } catch (e) {
+            print('=== DEBUG: Exception fetch proxy pada percobaan ke-$attempt: $e ===');
+          }
+          if (attempt < maxRetries) {
+            await Future.delayed(const Duration(milliseconds: 1500));
+          }
+        }
+      }
+
+      if (response == null || response.statusCode != 200) {
+        throw Exception('Gagal mengambil data dari URL. Status: ${response?.statusCode ?? 'error'}. Server Instagram sedang membatasi sementara, silakan coba tekan Auto-Fill kembali.');
+      }
+
+      // Pre-process HTML
+      String htmlContent = response.body;
+      htmlContent = htmlContent.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+      htmlContent = htmlContent.replaceAll(RegExp(r'</p>', caseSensitive: false), '\n\n');
+      htmlContent = htmlContent.replaceAll(RegExp(r'</div>', caseSensitive: false), '\n');
+
+      final rawDoc = parse(response.body);
+      String? posterUrl;
+
+      if (isInstagram) {
+        final imgElements = rawDoc.querySelectorAll('img.EmbeddedMediaImage, img[src*="fbcdn"], img[src*="cdninstagram"]');
+        for (var img in imgElements) {
+          final src = img.attributes['src'];
+          if (src != null && src.isNotEmpty) {
+            final isNotPoster = src.contains('profile_pic') ||
+                                src.contains('t51.82787-19') ||
+                                src.contains('s100x100') ||
+                                src.contains('s150x150') ||
+                                src.contains('static.cdninstagram.com') ||
+                                src.contains('rsrc.php');
+            if (!isNotPoster) {
+              posterUrl = src;
+              break;
+            }
+          }
+        }
+
+        if (posterUrl == null || posterUrl.isEmpty) {
+          final reg1 = RegExp(r'class="EmbeddedMediaImage[^"]*"[^>]*src="([^"]+)"', caseSensitive: false);
+          final reg2 = RegExp(r'src="([^"]*(?:fbcdn\.net|cdninstagram\.com)/v/t51\.82787-15/[^"]+)"', caseSensitive: false);
+          final reg3 = RegExp(r'"display_url"\s*:\s*"([^"]+)"', caseSensitive: false);
+
+          final m1 = reg1.firstMatch(response.body);
+          final m2 = reg2.firstMatch(response.body);
+          final m3 = reg3.firstMatch(response.body);
+
+          if (m1 != null && !m1.group(1)!.contains('rsrc.php') && !m1.group(1)!.contains('static.cdninstagram.com')) {
+            posterUrl = m1.group(1);
+          } else if (m2 != null && !m2.group(1)!.contains('rsrc.php') && !m2.group(1)!.contains('static.cdninstagram.com')) {
+            posterUrl = m2.group(1);
+          } else if (m3 != null && !m3.group(1)!.contains('rsrc.php') && !m3.group(1)!.contains('static.cdninstagram.com')) {
+            posterUrl = m3.group(1);
+          }
+        }
+
+        // Fallback meta tag og:image (hanya gambar event asli, abaikan aset static login Instagram)
+        if (posterUrl == null || posterUrl.isEmpty) {
+          final ogImage = rawDoc.querySelector('meta[property="og:image"]');
+          if (ogImage != null && ogImage.attributes['content'] != null) {
+            final ogContent = ogImage.attributes['content']!;
+            if (!ogContent.contains('rsrc.php') && !ogContent.contains('static.cdninstagram.com')) {
+              posterUrl = ogContent;
+              print('=== DEBUG IG: Poster ditemukan via og:image: $posterUrl ===');
+            }
+          }
+        }
+
+        if (posterUrl != null) {
+          posterUrl = posterUrl
+              .replaceAll('&amp;', '&')
+              .replaceAll(r'&', '&')
+              .replaceAll(r'\/', '/');
+        }
+      } else {
+        final eventImg = rawDoc.querySelector('img[src*="/images/event/"]');
+        final ogImage = rawDoc.querySelector('meta[property="og:image"]');
+
+        if (eventImg != null) {
+          posterUrl = eventImg.attributes['src'];
+        } else if (ogImage != null) {
+          posterUrl = ogImage.attributes['content'];
+        } else {
+          final img = rawDoc.querySelector('img');
+          if (img != null) {
+            posterUrl = img.attributes['src'];
+          }
+        }
+      }
+
+      // Jika URL relatif, jadikan absolut
+      if (posterUrl != null && !posterUrl.startsWith('http')) {
+        posterUrl = Uri.parse(url).resolve(posterUrl).toString();
+      }
+
+      // Mengubah resolusi gambar ruangcosplay dari medium (/md/) ke large (/lg/)
+      if (posterUrl != null && posterUrl.contains('/images/event/') && posterUrl.contains('/md/')) {
+        posterUrl = posterUrl.replaceAll('/md/', '/lg/');
+      }
+
+      print('=== DEBUG POSTER URL DITEMUKAN: $posterUrl ===');
+
+      String textToProcess = '';
+      if (isInstagram) {
+        final captionElem = rawDoc.querySelector('div.Caption, div.CaptionText');
+        if (captionElem != null) {
+          String capHtml = captionElem.innerHtml.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+          textToProcess = parse(capHtml).body?.text ?? captionElem.text;
+        } else {
+          final document = parse(htmlContent);
+          textToProcess = document.body?.text ?? htmlContent;
+        }
+      } else {
+        final document = parse(htmlContent);
+        textToProcess = document.body?.text ?? htmlContent;
+      }
+
+      textToProcess = textToProcess.replaceAll(RegExp(r'[ \t]+'), ' ');
+      textToProcess = textToProcess.replaceAll(RegExp(r'\n\s*\n'), '\n\n').trim();
+
+      if (isInstagram && (textToProcess.toLowerCase() == 'instagram' || textToProcess.length < 20)) {
+        throw Exception('Caption Instagram tidak terbaca (Instagram membatasi akses atau meminta login). Silakan coba tekan Auto-Fill kembali.');
+      }
+
+      if (textToProcess.length > 40000) {
+        textToProcess = textToProcess.substring(0, 40000);
+      }
+
+      final prompt = '''
+Ekstrak detail event dari teks berikut ke dalam format JSON yang tepat.
+Hanya kembalikan objek JSON tanpa formatting markdown (tanpa ```json ... ```), langsung mulai dengan { dan akhiri dengan }.
+
+Keys yang harus ada:
+- "event_name" (string)
+- "date" (string, WAJIB HANYA tanggal, bulan, dan tahun TANPA nama hari. Untuk antar tanggal dalam bulan yang sama TANPA SPASI di sekitar tanda hubung, contoh: '8-9 Agu 2026' atau '1-2 Agu 2026'. Untuk antar bulan BEDA DENGAN SPASI di sekitar tanda hubung, contoh: '30 Jul - 2 Agu 2026'. WAJIB singkatan bulan bahasa Indonesia: Jan, Feb, Mar, Apr, Mei, Jun, Jul, Agu, Sep, Okt, Nov, Des. DILARANG MENULISKAN NAMA HARI!)
+- "area" (string, HANYA nama Kota atau Kabupatennya saja tanpa nama provinsi, contoh: 'Jakarta', 'Malang', 'Bekasi')
+- "location" (string, tempat spesifik event DITAMBAH dengan nama Kota/Kabupatennya, contoh: 'Revo Mall, Bekasi' atau 'JIEXPO Kemayoran, Jakarta')
+- "description" (string, ambil secara LENGKAP seluruh isi deskripsi event tanpa dikurangi, dan pastikan mempertahankan format baris baru / paragraf menggunakan karakter "\\n")
+- "is_free" (boolean, true jika gratis, false jika berbayar)
+- "ticket_price" (string, harga tiket jika berbayar, atau string kosong jika gratis)
+
+Teks web:
+$textToProcess
+''';
+
+      final candidateModels = [
+        'gemini-flash-latest',
+        'gemini-flash-lite-latest',
+        'gemini-2.0-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash-lite',
+      ];
+
+      GenerateContentResponse? result;
+      String? lastError;
+
+      for (final modelName in candidateModels) {
+        try {
+          print('=== Trying Gemini model: $modelName ===');
+          final model = GenerativeModel(
+            model: modelName,
+            apiKey: ApiKeys.geminiApiKey,
+          );
+          result = await model.generateContent([Content.text(prompt)]);
+          if (result.text != null && result.text!.trim().isNotEmpty) {
+            print('=== Success with model: $modelName ===');
+            break;
+          }
+        } catch (e) {
+          print('Model $modelName error/quota reached: $e');
+          lastError = e.toString();
+        }
+      }
+
+      if (result == null || result.text == null || result.text!.trim().isEmpty) {
+        throw Exception('Gagal memproses dengan Gemini AI (Quota Exceeded): $lastError');
+      }
+
+      final jsonText = result.text?.trim() ?? '';
+
+      String cleanJson = jsonText;
+      if (cleanJson.startsWith('```json')) cleanJson = cleanJson.substring(7);
+      if (cleanJson.startsWith('```')) cleanJson = cleanJson.substring(3);
+      if (cleanJson.endsWith('```')) cleanJson = cleanJson.substring(0, cleanJson.length - 3);
+      cleanJson = cleanJson.trim();
+
+      final data = json.decode(cleanJson) as Map<String, dynamic>;
+
+      setState(() {
+        _eventNameController.text = data['event_name']?.toString() ?? '';
+        final rawDate = data['date']?.toString() ?? '';
+        _dateEventController.text = _cleanDateString(rawDate);
+        _areaController.text = data['area']?.toString() ?? '';
+        _locationController.text = data['location']?.toString() ?? '';
+        _descriptionController.text = data['description']?.toString() ?? '';
+
+        final isFree = data['is_free'] == true;
+        _htmType = isFree ? 'free' : 'paid';
+        if (!isFree) {
+          _ticketPriceController.text = data['ticket_price']?.toString() ?? '';
+        } else {
+          _ticketPriceController.clear();
+        }
+      });
+
+      // Proses pengunduhan dan upload poster
+      if (posterUrl != null && posterUrl.isNotEmpty) {
+        try {
+          String extension = '.jpg';
+          if (posterUrl.toLowerCase().contains('.webp')) extension = '.webp';
+          else if (posterUrl.toLowerCase().contains('.png')) extension = '.png';
+
+          final imageProxyUrl = 'https://wsrv.nl/?url=${Uri.encodeComponent(posterUrl)}';
+          final imageResponse = await http.get(Uri.parse(imageProxyUrl));
+
+          if (imageResponse.statusCode == 200) {
+            final xFile = XFile.fromData(
+              imageResponse.bodyBytes,
+              name: 'poster_${DateTime.now().millisecondsSinceEpoch}$extension',
+            );
+
+            final eventNameForStorage = _eventNameController.text.isNotEmpty
+                ? _eventNameController.text
+                : 'auto_event_${DateTime.now().millisecondsSinceEpoch}';
+
+            List<Map<String, dynamic>> uploadedPosters = await _storageService.uploadImages(
+              [xFile],
+              'dfestkonser',
+              eventNameForStorage,
+            );
+
+            if (uploadedPosters.isNotEmpty) {
+              setState(() {
+                for (var p in newPosters) {
+                  p['is_main'] = false;
+                }
+                uploadedPosters[0]['is_main'] = true;
+                newPosters.addAll(uploadedPosters);
+              });
+            }
+          }
+        } catch (e) {
+          print('=== DEBUG GAGAL PROSES POSTER: $e ===');
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Auto-Fill berhasil!')),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+      print('Gagal Auto-Fill: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal Auto-Fill: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingScrape = false;
+        });
+      }
+    }
+  }
+
+  String _cleanDateString(String rawDate) {
+    String dateStr = rawDate.trim();
+
+    final dayNamesRegex = RegExp(
+      r'^(?:senin|selasa|rabu|kamis|jumat|sabtu|minggu|\s|&|-|,)+[,\s]*',
+      caseSensitive: false,
+    );
+    dateStr = dateStr.replaceAll(dayNamesRegex, '').trim();
+    dateStr = dateStr.replaceAll(RegExp(r'^[,\s\-&]+'), '').trim();
+
+    dateStr = dateStr.replaceAllMapped(
+      RegExp(r'(\d+)\s*-\s*(\d+)'),
+      (match) => '${match.group(1)}-${match.group(2)}',
+    );
+
+    dateStr = dateStr.replaceAllMapped(
+      RegExp(r'([a-zA-Z]{3,})\s*-\s*(\d+)'),
+      (match) => '${match.group(1)} - ${match.group(2)}',
+    );
+    dateStr = dateStr.replaceAllMapped(
+      RegExp(r'(\d+)\s*-\s*([a-zA-Z]{3,})'),
+      (match) => '${match.group(1)} - ${match.group(2)}',
+    );
+
+    return dateStr;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -297,6 +752,29 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
                     children: [
                       Text("Detail Festival", style: Theme.of(context).textTheme.headlineSmall),
                       const SizedBox(height: 8.0),
+                      // Auto-fill Section
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _linkController,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Paste Event URL (RuangCosplay, Instagram, dll)',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _isLoadingScrape
+                              ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())
+                              : ElevatedButton.icon(
+                                  onPressed: _autoFillFromLink,
+                                  icon: const Icon(Icons.auto_awesome),
+                                  label: const Text('Auto-Fill'),
+                                ),
+                        ],
+                      ),
+                      const SizedBox(height: 16.0),
                       TextField(
                         controller: _eventNameController,
                         decoration: const InputDecoration(
@@ -431,13 +909,39 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
                               ),
                               child: Row(
                                 children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
+                                  GestureDetector(
+                                    onTap: () => _showPosterPreview(
                                       poster['url'],
-                                      width: 120,
-                                      height: 120,
-                                      fit: BoxFit.cover,
+                                      poster['path'].split('/').last,
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(
+                                            poster['url'],
+                                            width: 120,
+                                            height: 120,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          bottom: 4,
+                                          right: 4,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Icon(
+                                              Icons.zoom_in,
+                                              color: Colors.white,
+                                              size: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -458,11 +962,23 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
                                   IconButton(
                                     icon: const Icon(Icons.delete,
                                         color: Colors.red, size: 28),
-                                    onPressed: () {
-                                      setState(() {
-                                        newPosters.removeAt(index);
-                                      });
-                                    },
+                                     onPressed: () {
+                                       setState(() {
+                                         if (index >= 0 && index < newPosters.length) {
+                                           final removed = newPosters.removeAt(index);
+                                           if (removed['is_main'] == true && newPosters.isNotEmpty) {
+                                             newPosters.first['is_main'] = true;
+                                           }
+                                           for (int i = 0; i < newPosters.length; i++) {
+                                             newPosters[i]['order'] = i;
+                                           }
+                                           final path = removed['path']?.toString();
+                                           if (path != null && path.isNotEmpty && !path.startsWith('http')) {
+                                             FirebaseStorage.instance.ref().child(path).delete().catchError((_) {});
+                                           }
+                                         }
+                                       });
+                                     },
                                   ),
                                 ],
                               ),
@@ -570,6 +1086,29 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
                         flex: 3, // Lebih lebar dibanding daftar poster
                         child: Column(
                           children: [
+                            // Auto-fill Section
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _linkController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      labelText: 'Paste Event URL (RuangCosplay, Instagram, dll)',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _isLoadingScrape
+                                    ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())
+                                    : ElevatedButton.icon(
+                                        onPressed: _autoFillFromLink,
+                                        icon: const Icon(Icons.auto_awesome),
+                                        label: const Text('Auto-Fill'),
+                                      ),
+                              ],
+                            ),
+                            const SizedBox(height: 16.0),
                             TextField(
                               controller: _eventNameController,
                               decoration: const InputDecoration(
@@ -711,14 +1250,40 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
                                     ),
                                     child: Row(
                                       children: [
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          child: Image.network(
+                                        GestureDetector(
+                                          onTap: () => _showPosterPreview(
                                             poster['url'],
-                                            width: 120,
-                                            height: 120,
-                                            fit: BoxFit.cover,
+                                            poster['path'].split('/').last,
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.network(
+                                                  poster['url'],
+                                                  width: 120,
+                                                  height: 120,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                              Positioned(
+                                                bottom: 4,
+                                                right: 4,
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black54,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.zoom_in,
+                                                    color: Colors.white,
+                                                    size: 16,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                         const SizedBox(width: 12),
@@ -764,11 +1329,23 @@ class _CreateKonserPageState extends State<CreateKonserPage> {
                                             IconButton(
                                               icon: const Icon(Icons.delete,
                                                   color: Colors.red, size: 28),
-                                              onPressed: () {
-                                                setState(() {
-                                                  newPosters.removeAt(index);
-                                                });
-                                              },
+                                               onPressed: () {
+                                                 setState(() {
+                                                   if (index >= 0 && index < newPosters.length) {
+                                                     final removed = newPosters.removeAt(index);
+                                                     if (removed['is_main'] == true && newPosters.isNotEmpty) {
+                                                       newPosters.first['is_main'] = true;
+                                                     }
+                                                     for (int i = 0; i < newPosters.length; i++) {
+                                                       newPosters[i]['order'] = i;
+                                                     }
+                                                     final path = removed['path']?.toString();
+                                                     if (path != null && path.isNotEmpty && !path.startsWith('http')) {
+                                                       FirebaseStorage.instance.ref().child(path).delete().catchError((_) {});
+                                                     }
+                                                   }
+                                                 });
+                                               },
                                             ),
                                           ],
                                         ),

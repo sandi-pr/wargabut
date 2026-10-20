@@ -21,6 +21,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _dateController = TextEditingController();
+  final _airTimeController = TextEditingController();
 
   final _tagController = TextEditingController();
   final _genreController = TextEditingController();
@@ -215,6 +216,7 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
         await eventRef.set({
           'title': titleNews,
           'date': _dateController.text,
+          'air_time': _airTimeController.text.trim(),
           'desc': _descriptionController.text,
           'tags': _tags,
           'genres': _genres,
@@ -375,6 +377,19 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
 
                 const SizedBox(height: 16),
 
+                // Jam Tayang
+                TextField(
+                  controller: _airTimeController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Jam Tayang (Air Time)',
+                    hintText: 'Contoh: 22:00 WIB / 23:30 JST',
+                    prefixIcon: Icon(Icons.access_time),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
                 // Tag Berita
                 _buildTagInput(),
 
@@ -452,9 +467,11 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () {
-                            setState(() {
-                              newPosters.removeAt(index);
-                            });
+                            if (index >= 0 && index < newPosters.length) {
+                              setState(() {
+                                newPosters.removeAt(index);
+                              });
+                            }
                           },
                         ),
                       );
@@ -484,6 +501,17 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 labelText: 'Tanggal Berita / Tayang',
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            TextField(
+                              controller: _airTimeController,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Jam Tayang (Air Time)',
+                                hintText: 'Contoh: 22:00 WIB / 23:30 JST',
+                                prefixIcon: Icon(Icons.access_time),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -568,9 +596,11 @@ class _CreateAniNewsPageState extends State<CreateAniNewsPage> {
                                       trailing: IconButton(
                                         icon: const Icon(Icons.delete, color: Colors.red),
                                         onPressed: () {
-                                          setState(() {
-                                            newPosters.removeAt(index);
-                                          });
+                                          if (index >= 0 && index < newPosters.length) {
+                                            setState(() {
+                                              newPosters.removeAt(index);
+                                            });
+                                          }
                                         },
                                       ),
                                     ),

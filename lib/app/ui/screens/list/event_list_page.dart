@@ -18,7 +18,6 @@ import '../../components/shared/shared_filter_segments.dart';
 import '../../components/shared/shared_grid_result.dart';
 import '../../components/shared/shared_welcome_view.dart';
 import '../../components/shared/shared_admin_fab.dart';
-import 'package:wargabut/app/ui/components/event_card.dart';
 import 'package:wargabut/app/ui/screens/create/crawl_events.dart';
 
 
@@ -117,7 +116,7 @@ class _EventListPageState extends State<EventListPage> {
             // title: Text('Filter $type'), // <--- HAPUS INI agar tidak dobel
               content: SizedBox(
                   width: 400,
-                  height: 400,
+                  height: 480,
                   child: content // content sudah mengandung Padding & Judul
               )
           )

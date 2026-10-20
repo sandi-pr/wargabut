@@ -161,6 +161,36 @@ class _CrawlEventsPageState extends State<CrawlEventsPage> {
     return name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s-]'), '').replaceAll(RegExp(r'\s+'), '-');
   }
 
+  String _cleanDateString(String rawDate) {
+    String dateStr = rawDate.trim();
+    
+    // 1. Hapus nama hari (senin, selasa, rabu, kamis, jumat, sabtu, minggu) di awal
+    final dayNamesRegex = RegExp(
+      r'^(?:senin|selasa|rabu|kamis|jumat|sabtu|minggu|\s|&|-|,)+[,\s]*',
+      caseSensitive: false,
+    );
+    dateStr = dateStr.replaceAll(dayNamesRegex, '').trim();
+    dateStr = dateStr.replaceAll(RegExp(r'^[,\s\-&]+'), '').trim();
+
+    // 2. Format antar tanggal dalam bulan yang sama: hapus spasi di sekitar tanda hubung (misal '8 - 9' -> '8-9')
+    dateStr = dateStr.replaceAllMapped(
+      RegExp(r'(\d+)\s*-\s*(\d+)'),
+      (match) => '${match.group(1)}-${match.group(2)}',
+    );
+
+    // 3. Format antar bulan beda: pastikan ada spasi di sekitar tanda hubung (misal '30 Jul-2' -> '30 Jul - 2')
+    dateStr = dateStr.replaceAllMapped(
+      RegExp(r'([a-zA-Z]{3,})\s*-\s*(\d+)'),
+      (match) => '${match.group(1)} - ${match.group(2)}',
+    );
+    dateStr = dateStr.replaceAllMapped(
+      RegExp(r'(\d+)\s*-\s*([a-zA-Z]{3,})'),
+      (match) => '${match.group(1)} - ${match.group(2)}',
+    );
+
+    return dateStr;
+  }
+
   Future<void> _importAllNewEvents() async {
     final newEvents = _crawledEvents.where((e) => !_existingEventNames.contains(e['title']!.toLowerCase())).toList();
     if (newEvents.isEmpty) return;
@@ -171,10 +201,6 @@ class _CrawlEventsPageState extends State<CrawlEventsPage> {
       _currentProcessIndex = 0;
     });
 
-    final model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: ApiKeys.geminiApiKey,
-    );
     final storageService = StorageService();
 
     for (int i = 0; i < newEvents.length; i++) {
@@ -207,7 +233,7 @@ Hanya kembalikan objek JSON tanpa formatting markdown (tanpa ```json ... ```), l
 
 Keys yang harus ada:
 - "event_name" (string)
-- "date" (string, WAJIB gunakan format tanggal dan bulan bahasa Indonesia. Contoh singkatan: Jan, Feb, Mar, Apr, Mei, Jun, Jul, Agu, Sep, Okt, Nov, Des. Jangan gunakan Oct, May, atau Aug)
+- "date" (string, WAJIB HANYA tanggal, bulan, dan tahun TANPA nama hari. Untuk antar tanggal dalam bulan yang sama TANPA SPASI di sekitar tanda hubung, contoh: '8-9 Agu 2026' atau '1-2 Agu 2026'. Untuk antar bulan BEDA DENGAN SPASI di sekitar tanda hubung, contoh: '30 Jul - 2 Agu 2026'. WAJIB singkatan bulan bahasa Indonesia: Jan, Feb, Mar, Apr, Mei, Jun, Jul, Agu, Sep, Okt, Nov, Des. DILARANG MENULISKAN NAMA HARI!)
 - "area" (string, HANYA nama Kota atau Kabupatennya saja tanpa nama provinsi)
 - "location" (string)
 - "description" (string, ambil utuh pertahankan \n)
@@ -218,8 +244,31 @@ Teks web:
 $textToProcess
 ''';
 
-        final result = await model.generateContent([Content.text(prompt)]);
-        String cleanJson = result.text?.trim() ?? '{}';
+        final candidateModels = [
+          'gemini-flash-latest',
+          'gemini-flash-lite-latest',
+          'gemini-2.0-flash',
+          'gemini-2.5-flash',
+          'gemini-2.0-flash-lite',
+        ];
+
+        GenerateContentResponse? result;
+        for (final modelName in candidateModels) {
+          try {
+            final model = GenerativeModel(
+              model: modelName,
+              apiKey: ApiKeys.geminiApiKey,
+            );
+            result = await model.generateContent([Content.text(prompt)]);
+            if (result.text != null && result.text!.trim().isNotEmpty) {
+              break;
+            }
+          } catch (e) {
+            print('Model $modelName error in crawl: $e');
+          }
+        }
+
+        String cleanJson = result?.text?.trim() ?? '{}';
         if (cleanJson.startsWith('```json')) cleanJson = cleanJson.substring(7);
         if (cleanJson.startsWith('```')) cleanJson = cleanJson.substring(3);
         if (cleanJson.endsWith('```')) cleanJson = cleanJson.substring(0, cleanJson.length - 3);
@@ -252,10 +301,11 @@ $textToProcess
         }
 
         final isFree = data['is_free'] == true;
+        final rawDate = data['date']?.toString() ?? '';
         
         await FirebaseFirestore.instance.collection('jfestchart').doc(slug).set({
           'event_name': eventName,
-          'date': data['date']?.toString() ?? '',
+          'date': _cleanDateString(rawDate),
           'area': data['area']?.toString() ?? '',
           'location': data['location']?.toString() ?? '',
           'desc': data['description']?.toString() ?? '',
@@ -265,6 +315,9 @@ $textToProcess
           'is_medpart': false,
           'rundown': [],
         });
+
+        // Tambahkan delay agar tidak terkena limit API (4 detik antar request)
+        await Future.delayed(const Duration(seconds: 4));
 
       } catch (e) {
         print('Error memproses event ${ev['title']}: $e');

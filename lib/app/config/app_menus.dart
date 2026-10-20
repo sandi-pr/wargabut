@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import '../models/menu_item_model.dart';
 
 final List<MenuItemModel> appMenus = [
@@ -14,16 +13,28 @@ final List<MenuItemModel> appMenus = [
     route: "/anichekku",
     headerImage: "assets/images/AniChekku_banner_chibi.png",
   ),
-  // MenuItemModel(
-  //   label: "dCosplay",
-  //   subtitle: "Referensi Cosplay Bersama",
-  //   route: "/dcosplay",
-  //   headerImage: "assets/images/dCosplay_banner_chibi.png",
-  // ),
+  MenuItemModel(
+    label: "dCosplay",
+    subtitle: "Wadah Projekan Cosplay Bersama",
+    route: "/dcosplay",
+    headerImage: "assets/images/dCosplay_banner_chibi.png",
+  ),
   MenuItemModel(
     label: "dKonser",
     subtitle: "Media Festival Konser",
     route: "/dkonser",
     headerImage: "assets/images/dKonser_banner_chibi.png",
+  ),
+  MenuItemModel(
+    label: "WargaKomunitas",
+    subtitle: "Direktori & Biodata Komunitas",
+    route: "/komunitas",
+    headerImage: "assets/images/wargabut_mascot_chibi.png",
+  ),
+  MenuItemModel(
+    label: "Tanya Wargabut",
+    subtitle: "Asisten AI Event, Peta & Info Wibu",
+    route: "/tanya-maps",
+    headerImage: "assets/images/wargabut_mascot_chibi.png",
   ),
 ];

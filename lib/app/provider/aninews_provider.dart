@@ -14,6 +14,7 @@ class AniNewsProvider with ChangeNotifier {
   bool _isLoading = true;
   bool _forceShowList = false;
   String _activeSection = 'news';
+  String _sortScheduledBy = 'popular'; // 'popular' (default) atau 'date'
 
   List<String> _tags = [];
   List<String> _genres = [];
@@ -29,6 +30,13 @@ class AniNewsProvider with ChangeNotifier {
           _selectedGenres.isNotEmpty;
 
   String get searchTerm => _searchTerm;
+
+  String get sortScheduledBy => _sortScheduledBy;
+
+  void setSortScheduledBy(String value) {
+    _sortScheduledBy = value;
+    _filterNews();
+  }
 
   List<Map<String, dynamic>> get allNews => _allNews;
 
@@ -164,18 +172,32 @@ class AniNewsProvider with ChangeNotifier {
     final List<Map<String, dynamic>> scheduledOnly =
     _allNews.where((news) => news['is_scheduled'] == true).toList();
 
-    // 2. Urutkan berdasarkan tanggal terdekat (Ascending)
-    scheduledOnly.sort((a, b) {
-      DateTime? dateA = _parseDate(a['date']);
-      DateTime? dateB = _parseDate(b['date']);
+    // 2. Urutkan berdasarkan popularitas jika _sortScheduledBy == 'popular'
+    if (_sortScheduledBy == 'popular') {
+      scheduledOnly.sort((a, b) {
+        int membersA = (a['members'] is num) ? (a['members'] as num).toInt() : int.tryParse(a['members']?.toString() ?? '') ?? 0;
+        int membersB = (b['members'] is num) ? (b['members'] as num).toInt() : int.tryParse(b['members']?.toString() ?? '') ?? 0;
+        if (membersA != membersB) return membersB.compareTo(membersA);
+        DateTime? dateA = _parseDate(a['date']);
+        DateTime? dateB = _parseDate(b['date']);
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
+        return dateA.compareTo(dateB);
+      });
+    } else {
+      scheduledOnly.sort((a, b) {
+        DateTime? dateA = _parseDate(a['date']);
+        DateTime? dateB = _parseDate(b['date']);
 
-      if (dateA == null && dateB == null) return 0;
-      if (dateA == null) return 1; // item tanpa tanggal di bawah
-      if (dateB == null) return -1;
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1; // item tanpa tanggal di bawah
+        if (dateB == null) return -1;
 
-      // Ascending: Tanggal paling dekat dengan hari ini di atas
-      return dateA.compareTo(dateB);
-    });
+        // Ascending: Tanggal paling dekat dengan hari ini di atas
+        return dateA.compareTo(dateB);
+      });
+    }
 
     // 3. Ambil 2 jadwal pertama (Bisa disesuaikan angkanya)
     return scheduledOnly.take(2).toList();
@@ -242,17 +264,39 @@ class AniNewsProvider with ChangeNotifier {
     _filteredNews = searchResults.where((news) => news['is_scheduled'] != true).toList();
 
     // 3. Urutkan _allScheduled (Jadwal Mendatang)
-    // Aturan: Tanggal terdekat dengan hari ini di paling atas (Ascending)
-    _allScheduled.sort((a, b) {
-      DateTime? dateA = _parseDate(a['date']);
-      DateTime? dateB = _parseDate(b['date']);
+    if (_sortScheduledBy == 'popular') {
+      _allScheduled.sort((a, b) {
+        int membersA = (a['members'] is num)
+            ? (a['members'] as num).toInt()
+            : int.tryParse(a['members']?.toString() ?? '') ?? 0;
+        int membersB = (b['members'] is num)
+            ? (b['members'] as num).toInt()
+            : int.tryParse(b['members']?.toString() ?? '') ?? 0;
 
-      if (dateA == null && dateB == null) return 0;
-      if (dateA == null) return 1;  // Item tanpa tanggal ditaruh di bawah
-      if (dateB == null) return -1;
+        if (membersA != membersB) {
+          return membersB.compareTo(membersA); // Popularitas tertinggi di paling atas
+        }
+        // Fallback jika members sama: urutkan tanggal terdekat
+        DateTime? dateA = _parseDate(a['date']);
+        DateTime? dateB = _parseDate(b['date']);
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
+        return dateA.compareTo(dateB);
+      });
+    } else {
+      // Aturan: Tanggal terdekat dengan hari ini di paling atas (Ascending)
+      _allScheduled.sort((a, b) {
+        DateTime? dateA = _parseDate(a['date']);
+        DateTime? dateB = _parseDate(b['date']);
 
-      return dateA.compareTo(dateB); // Ascending
-    });
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;  // Item tanpa tanggal ditaruh di bawah
+        if (dateB == null) return -1;
+
+        return dateA.compareTo(dateB); // Ascending
+      });
+    }
 
     // 4. Urutkan _filteredNews (Berita/Artikel Biasa)
     // Aturan: Tanggal terbaru/paling update di paling atas (Descending)

@@ -193,8 +193,8 @@ class DetailEditForm extends StatelessWidget {
   }
 }
 
-// --- 4. POSTER MANAGER (Stream dari Firestore) ---
-class DetailPosterManager extends StatelessWidget {
+// --- 4. POSTER MANAGER (Stream dari Firestore) with Drag & Drop Reorder ---
+class DetailPosterManager extends StatefulWidget {
   final String collectionName;
   final String docId;
   final VoidCallback onAddImage;
@@ -202,63 +202,642 @@ class DetailPosterManager extends StatelessWidget {
   const DetailPosterManager({super.key, required this.collectionName, required this.docId, required this.onAddImage});
 
   @override
+  State<DetailPosterManager> createState() => _DetailPosterManagerState();
+}
+
+class _DetailPosterManagerState extends State<DetailPosterManager> {
+  bool _isReordering = false;
+
+  @override
   Widget build(BuildContext context) {
     final storage = StorageService();
 
     return Column(
       children: [
-        ElevatedButton.icon(onPressed: onAddImage, icon: const Icon(Icons.image), label: const Text('Tambah Poster')),
+        // Header dengan tombol tambah dan toggle reorder
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: widget.onAddImage,
+                icon: const Icon(Icons.add_photo_alternate),
+                label: const Text('Tambah Poster'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () => setState(() => _isReordering = !_isReordering),
+              icon: Icon(_isReordering ? Icons.check : Icons.reorder),
+              tooltip: _isReordering ? 'Selesai Reorder' : 'Ubah Urutan Poster',
+              style: IconButton.styleFrom(
+                backgroundColor: _isReordering ? Colors.green : null,
+                foregroundColor: _isReordering ? Colors.white : null,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
+
         StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection(collectionName).doc(docId).snapshots(),
+          stream: FirebaseFirestore.instance.collection(widget.collectionName).doc(widget.docId).snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) return const CircularProgressIndicator();
             final data = snapshot.data!.data() as Map<String, dynamic>?;
-            final posters = (data?['posters'] as List?) ?? [];
+            List<dynamic> posters = List.from((data?['posters'] as List?) ?? []);
+
+            // Handle legacy data: jika semua order = 1 atau tidak ada order, normalize berdasarkan index
+            bool needsNormalization = posters.isEmpty ||
+                posters.every((p) => p['order'] == null || p['order'] == 1);
+
+            if (needsNormalization && posters.isNotEmpty) {
+              // Normalize order berdasarkan array index (mulai dari 0)
+              for (int i = 0; i < posters.length; i++) {
+                posters[i]['order'] = i;
+              }
+              // Auto-save normalized order
+              _savePosters(posters);
+            }
 
             if (posters.isEmpty) return const Text("Belum ada poster");
 
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: posters.length,
-              itemBuilder: (_, i) {
-                final p = posters[i];
-                return ListTile(
-                  leading: Image.network(p['url'], width: 50, height: 50, fit: BoxFit.cover),
-                  title: Text(p['path'].toString().split('/').last),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(p['is_main'] == true ? Icons.star : Icons.star_border, color: Colors.amber),
-                        onPressed: () => _setMainPoster(i),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => storage.deletePoster(context, i, collectionName, docId),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
+            if (_isReordering) {
+              return _buildReorderableList(posters);
+            }
+
+            return _buildPosterList(posters, storage);
           },
         )
       ],
     );
   }
 
-  Future<void> _setMainPoster(int index) async {
-    final ref = FirebaseFirestore.instance.collection(collectionName).doc(docId);
+  Widget _buildPosterList(List<dynamic> posters, StorageService storage) {
+    // Sort berdasarkan order
+    final sortedPosters = List.from(posters);
+    sortedPosters.sort((a, b) {
+      final orderA = (a['order'] as num?) ?? 0;
+      final orderB = (b['order'] as num?) ?? 0;
+      return orderA.compareTo(orderB);
+    });
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: sortedPosters.length,
+      itemBuilder: (_, i) {
+        final p = sortedPosters[i];
+        final isMain = p['is_main'] == true;
+        final order = (p['order'] as num?)?.toInt() ?? i;
+        final title = p['title']?.toString() ?? p['path'].toString().split('/').last;
+        final posterUrl = p['url']?.toString() ?? '';
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            leading: GestureDetector(
+              onTap: posterUrl.isNotEmpty ? () => _showPosterPreview(posterUrl, title) : null,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      posterUrl,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 60,
+                        height: 60,
+                        color: Colors.grey.shade300,
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    ),
+                  ),
+                  if (isMain)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.amber,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.star, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  // Overlay icon untuk indicate bisa diklik
+                  if (posterUrl.isNotEmpty)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(8),
+                          ),
+                        ),
+                        child: const Icon(Icons.zoom_in, size: 12, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            title: Text(
+              '#${order + 1} - $title',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: isMain
+                ? const Text('Poster Utama', style: TextStyle(color: Colors.amber))
+                : Text('Order: ${order + 1}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                  tooltip: 'Edit Nama Poster',
+                  onPressed: () => _editPosterTitle(p),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.star_outline, color: Colors.amber),
+                  tooltip: 'Jadikan Poster Utama',
+                  onPressed: () => _setMainPoster(p),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: 'Hapus Poster',
+                  onPressed: () => _deletePoster(p),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReorderableList(List<dynamic> posters) {
+    // Sort berdasarkan order untuk tampilan
+    final sortedPosters = List<Map<String, dynamic>>.from(posters.cast());
+    sortedPosters.sort((a, b) {
+      final orderA = (a['order'] as num?) ?? 0;
+      final orderB = (b['order'] as num?) ?? 0;
+      return orderA.compareTo(orderB);
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.drag_indicator, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Seret poster untuk mengubah urutan. Poster utama akan menjadi poster pertama.',
+                  style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: sortedPosters.length,
+          onReorder: (oldIndex, newIndex) => _onReorder(sortedPosters, oldIndex, newIndex),
+          itemBuilder: (_, i) {
+            final p = sortedPosters[i];
+            final isMain = p['is_main'] == true;
+            final title = p['title']?.toString() ?? p['path'].toString().split('/').last;
+            final posterUrl = p['url']?.toString() ?? '';
+
+            return Card(
+              key: ValueKey(p['path'] ?? i),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReorderableDragStartListener(
+                      index: i,
+                      child: const Icon(Icons.drag_handle, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: posterUrl.isNotEmpty ? () => _showPosterPreview(posterUrl, title) : null,
+                      child: Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              posterUrl,
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 50,
+                                height: 50,
+                                color: Colors.grey.shade300,
+                                child: const Icon(Icons.broken_image, size: 20),
+                              ),
+                            ),
+                          ),
+                          // Overlay icon untuk indicate bisa diklik
+                          if (posterUrl.isNotEmpty)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(4),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                ),
+                                child: const Icon(Icons.zoom_in, size: 10, color: Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                title: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isMain ? Colors.amber : Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '#${i + 1}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isMain ? Colors.white : Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    if (isMain) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.star, size: 16, color: Colors.amber),
+                      const SizedBox(width: 2),
+                      const Text('Utama', style: TextStyle(fontSize: 12, color: Colors.amber)),
+                    ],
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Tombol Edit Nama
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20, color: Colors.blue),
+                      tooltip: 'Edit Nama Poster',
+                      onPressed: () => _editPosterTitle(p),
+                    ),
+                    // Tombol Move Up
+                    IconButton(
+                      icon: const Icon(Icons.arrow_upward, size: 20),
+                      tooltip: 'Pindah ke Atas',
+                      onPressed: i > 0 ? () => _movePoster(sortedPosters, i, i - 1) : null,
+                    ),
+                    // Tombol Move Down
+                    IconButton(
+                      icon: const Icon(Icons.arrow_downward, size: 20),
+                      tooltip: 'Pindah ke Bawah',
+                      onPressed: i < sortedPosters.length - 1 ? () => _movePoster(sortedPosters, i, i + 1) : null,
+                    ),
+                    // Toggle Main Poster
+                    IconButton(
+                      icon: Icon(
+                        isMain ? Icons.star : Icons.star_outline,
+                        color: Colors.amber,
+                      ),
+                      tooltip: isMain ? 'Sudah Poster Utama' : 'Jadikan Poster Utama',
+                      onPressed: () => _setMainPoster(p),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _isReordering = false),
+                icon: const Icon(Icons.check),
+                label: const Text('Selesai'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green,
+                  side: const BorderSide(color: Colors.green),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deletePoster(Map<String, dynamic> targetPoster) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Poster'),
+        content: const Text('Apakah Anda yakin ingin menghapus poster ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    final storage = StorageService();
+    await storage.deletePoster(
+      context,
+      -1,
+      widget.collectionName,
+      widget.docId,
+      targetPoster: targetPoster,
+    );
+  }
+
+  void _onReorder(List<Map<String, dynamic>> sortedPosters, int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    final item = sortedPosters.removeAt(oldIndex);
+    sortedPosters.insert(newIndex, item);
+
+    // Update order berdasarkan posisi baru
+    for (int i = 0; i < sortedPosters.length; i++) {
+      sortedPosters[i]['order'] = i;
+    }
+
+    await _savePosters(sortedPosters);
+  }
+
+  void _movePoster(List<Map<String, dynamic>> sortedPosters, int currentIndex, int newIndex) async {
+    final item = sortedPosters.removeAt(currentIndex);
+    sortedPosters.insert(newIndex, item);
+
+    // Update order berdasarkan posisi baru
+    for (int i = 0; i < sortedPosters.length; i++) {
+      sortedPosters[i]['order'] = i;
+    }
+
+    await _savePosters(sortedPosters);
+  }
+
+  Future<void> _setMainPoster(Map<String, dynamic> targetPoster) async {
+    final ref = FirebaseFirestore.instance.collection(widget.collectionName).doc(widget.docId);
     final doc = await ref.get();
-    if(doc.exists) {
-      List p = List.from(doc['posters']);
-      for(var item in p) {
+
+    if (doc.exists) {
+      List<Map<String, dynamic>> posters = List.from(doc['posters']).cast<Map<String, dynamic>>();
+
+      // Set semua poster ke is_main: false
+      for (var item in posters) {
         item['is_main'] = false;
       }
-      p[index]['is_main'] = true;
-      await ref.update({'posters': p});
+
+      final targetPath = targetPoster['path']?.toString();
+      final targetUrl = targetPoster['url']?.toString();
+
+      // Set poster yang dipilih sebagai utama
+      for (var item in posters) {
+        if ((targetPath != null && item['path'] == targetPath) ||
+            (targetUrl != null && item['url'] == targetUrl)) {
+          item['is_main'] = true;
+          break;
+        }
+      }
+
+      await ref.update({'posters': posters});
+    }
+  }
+
+  Future<void> _editPosterTitle(Map<String, dynamic> targetPoster) async {
+    final controller = TextEditingController(
+      text: targetPoster['title']?.toString() ?? targetPoster['path'].toString().split('/').last,
+    );
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Nama Poster'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Nama Poster',
+            hintText: 'Contoh: Poster Depan, Poster Belakang',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await _savePosterTitle(targetPoster, result);
+    }
+  }
+
+  Future<void> _savePosterTitle(Map<String, dynamic> targetPoster, String newTitle) async {
+    try {
+      final ref = FirebaseFirestore.instance.collection(widget.collectionName).doc(widget.docId);
+      final doc = await ref.get();
+
+      if (doc.exists) {
+        List<Map<String, dynamic>> posters = List.from(doc['posters']).cast<Map<String, dynamic>>();
+
+        final targetPath = targetPoster['path']?.toString();
+        final targetUrl = targetPoster['url']?.toString();
+
+        // Update title poster yang dipilih
+        for (var item in posters) {
+          if ((targetPath != null && item['path'] == targetPath) ||
+              (targetUrl != null && item['url'] == targetUrl)) {
+            item['title'] = newTitle;
+            break;
+          }
+        }
+
+        await ref.update({'posters': posters});
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Nama poster diubah menjadi "$newTitle"')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error saving poster title: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal mengubah nama poster')),
+        );
+      }
+    }
+  }
+
+  void _showPosterPreview(String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header dengan judul dan tombol close
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
+            ),
+            // Gambar preview dengan zoom
+            Flexible(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                            SizedBox(height: 8),
+                            Text('Gagal memuat gambar', style: TextStyle(color: Colors.white54)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _savePosters(List<dynamic> posters) async {
+    try {
+      final ref = FirebaseFirestore.instance.collection(widget.collectionName).doc(widget.docId);
+
+      // Sort posters by order before saving
+      final sortedPosters = List.from(posters);
+      sortedPosters.sort((a, b) {
+        final orderA = (a['order'] as num?) ?? 0;
+        final orderB = (b['order'] as num?) ?? 0;
+        return orderA.compareTo(orderB);
+      });
+
+      await ref.update({'posters': sortedPosters});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Urutan poster berhasil disimpan!'), duration: Duration(seconds: 1)),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saving poster order: $e');
     }
   }
 }
@@ -335,6 +914,109 @@ class _NewsInfoCardState extends State<NewsInfoCard> {
                       ),
                   ],
                 ),
+
+                if (widget.data['air_time'] != null && widget.data['air_time'].toString().trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time_filled, size: 18, color: Colors.blueAccent),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Jam Tayang: ${widget.data['air_time']}",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueAccent),
+                      ),
+                    ],
+                  ),
+                ],
+
+                // Metadata Tambahan: Studio, Members, Score
+                if (widget.data['studios'] != null ||
+                    widget.data['members_formatted'] != null ||
+                    widget.data['members'] != null ||
+                    (widget.data['score'] != null && widget.data['score'] != 'N/A' && widget.data['score'] != '0')) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (widget.data['members_formatted'] != null || widget.data['members'] != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.person, size: 14, color: Colors.blue.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.data['members_formatted'] ?? widget.data['members']} Anggota',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (widget.data['studios'] is List && (widget.data['studios'] as List).isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.purple.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.business, size: 14, color: Colors.purple.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                (widget.data['studios'] as List).join(', '),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.purple.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (widget.data['score'] != null &&
+                          widget.data['score'] != 'N/A' &&
+                          widget.data['score'] != '0')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star, size: 14, color: Colors.amber),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Skor ${widget.data['score']}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.amber.shade900,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
 
                 // Genres
                 if (genres.isNotEmpty) ...[
@@ -458,6 +1140,7 @@ class ChipInputWidget extends StatelessWidget {
 class NewsEditForm extends StatelessWidget {
   final TextEditingController titleCtrl;
   final TextEditingController dateCtrl;
+  final TextEditingController? airTimeCtrl;
   final TextEditingController descCtrl;
   final TextEditingController tagCtrl;
   final TextEditingController genreCtrl;
@@ -475,6 +1158,7 @@ class NewsEditForm extends StatelessWidget {
     super.key,
     required this.titleCtrl,
     required this.dateCtrl,
+    this.airTimeCtrl,
     required this.descCtrl,
     required this.tagCtrl,
     required this.genreCtrl,
@@ -497,6 +1181,18 @@ class NewsEditForm extends StatelessWidget {
         const SizedBox(height: 16),
         TextField(controller: dateCtrl, decoration: const InputDecoration(labelText: 'Tanggal Tayang / Berita', border: OutlineInputBorder())),
         const SizedBox(height: 16),
+        if (airTimeCtrl != null) ...[
+          TextField(
+            controller: airTimeCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Jam Tayang (Air Time)',
+              hintText: 'Contoh: 22:00 WIB / 23:30 JST',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.access_time),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
 
         ChipInputWidget(
           controller: tagCtrl,

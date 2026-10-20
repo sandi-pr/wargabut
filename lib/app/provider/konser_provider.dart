@@ -107,6 +107,8 @@ class KonserProvider with ChangeNotifier {
 
     // 1. Normalisasi string: trim & ubah semua jenis strip (en-dash/em-dash) jadi hyphen biasa
     String cleanDateString = dateString.trim().replaceAll(RegExp(r'\s*[–—]\s*'), ' - ');
+    // Hapus nama hari di awal string (misal: "Sabtu, ")
+    cleanDateString = cleanDateString.replaceAll(RegExp(r'[a-zA-Z]+,\s*'), '');
     String dateToParse = cleanDateString;
 
     // --- Helper untuk mencoba parse tanggal tunggal dengan berbagai format ---
@@ -270,6 +272,14 @@ class KonserProvider with ChangeNotifier {
       if (_selectedAreas.contains('Jakarta') && area.toLowerCase().startsWith('jakarta')) {
         matchesArea = true;
       }
+      if (_selectedAreas.contains('Tangerang') && area.toLowerCase().contains('tangerang')) {
+        matchesArea = true;
+      }
+      if (_selectedAreas.contains('Jabodetabek')) {
+        if (isJabodetabekArea(area) || (area.isEmpty && isJabodetabekArea(location))) {
+          matchesArea = true;
+        }
+      }
 
       // Filter by month
       bool matchesMonth = true;
@@ -324,23 +334,11 @@ class KonserProvider with ChangeNotifier {
     }
 
     // Sort the areas
-    List<String> jabodetabek = [
-      'Jakarta',
-      'Jakarta Pusat',
-      'Jakarta Utara',
-      'Jakarta Barat',
-      'Jakarta Timur',
-      'Jakarta Selatan',
-      'Bogor',
-      'Depok',
-      'Tangerang',
-      'Tangerang Selatan',
-      'Bekasi',
-    ];
-
     _areas.sort((a, b) {
-      bool isSelectedA = _selectedAreas.contains(a);
-      bool isSelectedB = _selectedAreas.contains(b);
+      bool isSelectedA = _selectedAreas.contains(a) ||
+          (_selectedAreas.contains('Jabodetabek') && isJabodetabekArea(a));
+      bool isSelectedB = _selectedAreas.contains(b) ||
+          (_selectedAreas.contains('Jabodetabek') && isJabodetabekArea(b));
       bool isOnlineA = a.toLowerCase().contains('online');
       bool isOnlineB = b.toLowerCase().contains('online');
 
@@ -353,8 +351,8 @@ class KonserProvider with ChangeNotifier {
       if (isOnlineA && !isOnlineB) return 1;
 
       // Sort by number of events
-      int indexA = jabodetabek.indexOf(a);
-      int indexB = jabodetabek.indexOf(b);
+      int indexA = jabodetabekAreas.indexOf(a);
+      int indexB = jabodetabekAreas.indexOf(b);
       if (indexA != -1 && indexB != -1) {
         // Both are jabodetabek, sort by index
         return indexA.compareTo(indexB);
@@ -566,6 +564,8 @@ class KonserProvider with ChangeNotifier {
             // --- 1. NORMALISASI STRING (Handler En-dash/Em-dash) ---
             // Mengubah tanda '–' (en-dash) atau '—' (em-dash) menjadi '-' (strip biasa)
             String dateString = rawDate.replaceAll('–', '-').replaceAll('—', '-');
+            // Hapus nama hari (misal: "Sabtu, ") agar parsing tidak error
+            dateString = dateString.replaceAll(RegExp(r'[a-zA-Z]+,\s*'), '');
             String dateToParse = dateString;
 
             // Cek apakah ini format rentang

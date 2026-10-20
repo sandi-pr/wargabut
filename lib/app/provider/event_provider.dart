@@ -40,6 +40,91 @@ class EventProvider with ChangeNotifier {
 
   List<Map<String, dynamic>> get allEvents => _allEvents;
 
+  final Map<String, String> _latestPosterCache = {};
+
+  /// Mendapatkan event berdasarkan ID atau slug
+  Map<String, dynamic>? getEventById(String eventId) {
+    if (eventId.isEmpty) return null;
+    try {
+      return _allEvents.firstWhere(
+        (e) => (e['id'] ?? e['event_id'] ?? '').toString() == eventId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Helper statis untuk mengekstrak URL poster dari map event data
+  static String extractPosterUrl(Map<String, dynamic> eventData) {
+    if (eventData['posters'] is List && (eventData['posters'] as List).isNotEmpty) {
+      final posters = eventData['posters'] as List;
+      final mainPoster = posters.firstWhere(
+        (p) => p is Map && p['is_main'] == true,
+        orElse: () => posters[0],
+      );
+      if (mainPoster is Map) {
+        final url = (mainPoster['url'] ?? '').toString();
+        if (url.isNotEmpty) return url;
+      }
+    }
+    final singlePoster = (eventData['poster'] ?? eventData['poster_url'] ?? '').toString();
+    if (singlePoster.isNotEmpty) return singlePoster;
+
+    if (eventData['images'] is List && (eventData['images'] as List).isNotEmpty) {
+      final firstImg = eventData['images'][0].toString();
+      if (firstImg.isNotEmpty) return firstImg;
+    }
+
+    return '';
+  }
+
+  /// Mendapatkan URL poster terbaru untuk suatu event ID
+  /// Mengutamakan poster dari data event terbaru di EventProvider/Firestore
+  String getLatestPosterUrl(String eventId, {String fallback = ''}) {
+    if (eventId.isEmpty) return fallback;
+
+    // 1. Cek di _allEvents terlebih dahulu
+    final ev = getEventById(eventId);
+    if (ev != null) {
+      final posterFromData = extractPosterUrl(ev);
+      if (posterFromData.isNotEmpty) {
+        _latestPosterCache[eventId] = posterFromData;
+        return posterFromData;
+      }
+    }
+
+    // 2. Cek di memory cache
+    if (_latestPosterCache.containsKey(eventId) && _latestPosterCache[eventId]!.isNotEmpty) {
+      return _latestPosterCache[eventId]!;
+    }
+
+    return fallback;
+  }
+
+  /// Asinkron mengambil URL poster terbaru dari Firestore jfestchart jika diperbarui
+  Future<String> fetchLatestPosterUrl(String eventId) async {
+    if (eventId.isEmpty) return '';
+    try {
+      final doc = await FirebaseFirestore.instance.collection('jfestchart').doc(eventId).get();
+      if (doc.exists && doc.data() != null) {
+        final poster = extractPosterUrl(doc.data()!);
+        if (poster.isNotEmpty) {
+          final old = _latestPosterCache[eventId];
+          _latestPosterCache[eventId] = poster;
+          if (old != poster) {
+            notifyListeners();
+          }
+          return poster;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching latest poster for event $eventId: $e');
+      }
+    }
+    return getLatestPosterUrl(eventId);
+  }
+
   List<Map<String, dynamic>> get filteredEvents => _filteredEvents;
 
   List<String> get areas => _areas;
@@ -107,6 +192,8 @@ class EventProvider with ChangeNotifier {
 
     // 1. Normalisasi string: trim & ubah semua jenis strip (en-dash/em-dash) jadi hyphen biasa
     String cleanDateString = dateString.trim().replaceAll(RegExp(r'\s*[–—]\s*'), ' - ');
+    // Hapus nama hari di awal string (misal: "Sabtu, ")
+    cleanDateString = cleanDateString.replaceAll(RegExp(r'[a-zA-Z]+,\s*'), '');
     String dateToParse = cleanDateString;
 
     // --- Helper untuk mencoba parse tanggal tunggal dengan berbagai format ---
@@ -270,6 +357,14 @@ class EventProvider with ChangeNotifier {
       if (_selectedAreas.contains('Jakarta') && area.toLowerCase().startsWith('jakarta')) {
         matchesArea = true;
       }
+      if (_selectedAreas.contains('Tangerang') && area.toLowerCase().contains('tangerang')) {
+        matchesArea = true;
+      }
+      if (_selectedAreas.contains('Jabodetabek')) {
+        if (isJabodetabekArea(area) || (area.isEmpty && isJabodetabekArea(location))) {
+          matchesArea = true;
+        }
+      }
 
       // Filter by month
       bool matchesMonth = true;
@@ -324,23 +419,11 @@ class EventProvider with ChangeNotifier {
     }
 
     // Sort the areas
-    List<String> jabodetabek = [
-      'Jakarta',
-      'Jakarta Pusat',
-      'Jakarta Utara',
-      'Jakarta Barat',
-      'Jakarta Timur',
-      'Jakarta Selatan',
-      'Bogor',
-      'Depok',
-      'Tangerang',
-      'Tangerang Selatan',
-      'Bekasi',
-    ];
-
     _areas.sort((a, b) {
-      bool isSelectedA = _selectedAreas.contains(a);
-      bool isSelectedB = _selectedAreas.contains(b);
+      bool isSelectedA = _selectedAreas.contains(a) ||
+          (_selectedAreas.contains('Jabodetabek') && isJabodetabekArea(a));
+      bool isSelectedB = _selectedAreas.contains(b) ||
+          (_selectedAreas.contains('Jabodetabek') && isJabodetabekArea(b));
       bool isOnlineA = a.toLowerCase().contains('online');
       bool isOnlineB = b.toLowerCase().contains('online');
 
@@ -353,8 +436,8 @@ class EventProvider with ChangeNotifier {
       if (isOnlineA && !isOnlineB) return 1;
 
       // Sort by number of events
-      int indexA = jabodetabek.indexOf(a);
-      int indexB = jabodetabek.indexOf(b);
+      int indexA = jabodetabekAreas.indexOf(a);
+      int indexB = jabodetabekAreas.indexOf(b);
       if (indexA != -1 && indexB != -1) {
         // Both are jabodetabek, sort by index
         return indexA.compareTo(indexB);
@@ -598,6 +681,8 @@ class EventProvider with ChangeNotifier {
             // --- 1. NORMALISASI STRING (Handler En-dash/Em-dash) ---
             // Mengubah tanda '–' (en-dash) atau '—' (em-dash) menjadi '-' (strip biasa)
             String dateString = rawDate.replaceAll('–', '-').replaceAll('—', '-');
+            // Hapus nama hari (misal: "Sabtu, ") agar parsing tidak error
+            dateString = dateString.replaceAll(RegExp(r'[a-zA-Z]+,\s*'), '');
             String dateToParse = dateString;
 
             // Cek apakah ini format rentang

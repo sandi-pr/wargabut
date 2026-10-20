@@ -2,23 +2,21 @@
 @JS()
 library web_share_service;
 
-import 'dart:async';
-import 'package:js/js.dart';
+import 'dart:js_interop';
 
 @JS()
-@anonymous
-class ShareData {
+extension type ShareData._(JSObject _) implements JSObject {
   external factory ShareData({String? url, String? text, String? title});
 }
 
 @JS('navigator.share')
-external Future<void> _shareJs(ShareData data);
+external JSPromise _shareJs(ShareData data);
 
 @JS('navigator.share')
-external get _webShareApi;
+external JSAny? get _webShareApi;
 
 bool get isWebShareSupportedPlatform => _webShareApi != null;
 
-Future<void> sharePlatform({String? url, String? text, String? title}) {
-  return _shareJs(ShareData(title: title, text: text, url: url));
+Future<void> sharePlatform({String? url, String? text, String? title}) async {
+  await _shareJs(ShareData(title: title, text: text, url: url)).toDart;
 }

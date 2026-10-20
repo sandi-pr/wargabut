@@ -41,15 +41,29 @@ class AuthProvider with ChangeNotifier {
         _isLoggedIn = true;
         await prefs.setBool('isLoggedIn', true);
 
-        // Cek status admin di Firestore
-        final doc = await _firestore.collection('users').doc(user.uid).get();
-        if (doc.exists) {
-          _isAdmin = true;
-          await prefs.setBool('isAdmin', true);
-        } else {
-          _isAdmin = false;
-          await prefs.setBool('isAdmin', false);
+        // Cek status admin:
+        // 1. Berdasarkan email resmi admin: admin@wargabut.id
+        // 2. Atau berdasarkan field 'isAdmin' == true di koleksi Firestore 'users'
+        bool adminCheck = false;
+        final email = user.email?.toLowerCase().trim();
+        if (email == 'admin@wargabut.id') {
+          adminCheck = true;
         }
+
+        try {
+          final doc = await _firestore.collection('users').doc(user.uid).get();
+          if (doc.exists) {
+            final data = doc.data();
+            if (data != null && (data['isAdmin'] == true || data['is_admin'] == true)) {
+              adminCheck = true;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error memvalidasi status admin di Firestore: $e');
+        }
+
+        _isAdmin = adminCheck;
+        await prefs.setBool('isAdmin', _isAdmin);
       }
 
       // Beri tahu seluruh aplikasi (termasuk GoRouter) tentang perubahan status

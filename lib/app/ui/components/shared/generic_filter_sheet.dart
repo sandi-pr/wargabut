@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:localstorage/localstorage.dart';
 import 'package:provider/provider.dart';
 import '../../../provider/location_provider.dart';
+import '../../../utils/location_utils.dart';
 
 // Callback function type definitions
 typedef OnApplyFilter = void Function(List<String> selectedItems);
@@ -70,8 +71,31 @@ class _GenericFilterSheetState extends State<GenericFilterSheet> {
   @override
   Widget build(BuildContext context) {
     final bool isAllSelected = widget.sourceList.isNotEmpty &&
-        _tempSelectedItems.length == widget.sourceList.length;
+        widget.sourceList.every((item) => _tempSelectedItems.contains(item));
     final bool isNearestSelected = _tempSelectedItems.contains('Terdekat');
+
+    final jabodetabekSourceItems = widget.filterType == 'Lokasi'
+        ? widget.sourceList.where((item) => isJabodetabekArea(item)).toList()
+        : <String>[];
+
+    bool? isJabodetabekSelected;
+    if (widget.filterType == 'Lokasi') {
+      if (jabodetabekSourceItems.isEmpty) {
+        isJabodetabekSelected = _tempSelectedItems.contains('Jabodetabek');
+      } else {
+        final int selectedCount = jabodetabekSourceItems
+            .where((item) => _tempSelectedItems.contains(item))
+            .length;
+        if (selectedCount == jabodetabekSourceItems.length ||
+            _tempSelectedItems.contains('Jabodetabek')) {
+          isJabodetabekSelected = true;
+        } else if (selectedCount > 0) {
+          isJabodetabekSelected = null;
+        } else {
+          isJabodetabekSelected = false;
+        }
+      }
+    }
 
     // --- PERUBAHAN ADA DI SINI ---
     // Membungkus seluruh konten dengan Padding agar rapi
@@ -91,7 +115,7 @@ class _GenericFilterSheetState extends State<GenericFilterSheet> {
           const SizedBox(height: 16.0),
 
           // 2. Konten Filter (Checkbox dll)
-          if (widget.filterType == 'Lokasi')
+          if (widget.filterType == 'Lokasi') ...[
             CheckboxListTile(
               title: const Text("Terdekat", style: TextStyle(fontWeight: FontWeight.bold)),
               value: isNearestSelected,
@@ -106,6 +130,35 @@ class _GenericFilterSheetState extends State<GenericFilterSheet> {
                 });
               },
             ),
+            CheckboxListTile(
+              tristate: true,
+              title: const Text("Jabodetabek", style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text(
+                "Jakarta, Bogor, Depok, Tangerang, Bekasi",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              value: isJabodetabekSelected,
+              onChanged: (bool? value) {
+                setState(() {
+                  final shouldSelect = isJabodetabekSelected != true;
+                  if (shouldSelect) {
+                    _tempSelectedItems.remove("Terdekat");
+                    if (!_tempSelectedItems.contains('Jabodetabek')) {
+                      _tempSelectedItems.add('Jabodetabek');
+                    }
+                    for (final item in jabodetabekSourceItems) {
+                      if (!_tempSelectedItems.contains(item)) {
+                        _tempSelectedItems.add(item);
+                      }
+                    }
+                  } else {
+                    _tempSelectedItems.remove('Jabodetabek');
+                    _tempSelectedItems.removeWhere((item) => isJabodetabekArea(item));
+                  }
+                });
+              },
+            ),
+          ],
 
           CheckboxListTile(
             title: Text("Pilih Semua ${widget.filterType}",
@@ -116,6 +169,9 @@ class _GenericFilterSheetState extends State<GenericFilterSheet> {
                 if (value == true) {
                   _tempSelectedItems.clear();
                   _tempSelectedItems.addAll(widget.sourceList);
+                  if (widget.filterType == 'Lokasi') {
+                    _tempSelectedItems.add('Jabodetabek');
+                  }
                 } else {
                   _tempSelectedItems.clear();
                 }
@@ -129,15 +185,37 @@ class _GenericFilterSheetState extends State<GenericFilterSheet> {
               itemCount: widget.sourceList.length,
               itemBuilder: (context, index) {
                 final item = widget.sourceList[index];
+                final isChecked = _tempSelectedItems.contains(item) ||
+                    (_tempSelectedItems.contains('Jabodetabek') &&
+                        widget.filterType == 'Lokasi' &&
+                        isJabodetabekArea(item));
+
                 return CheckboxListTile(
                   title: Text(item),
-                  value: _tempSelectedItems.contains(item),
+                  value: isChecked,
                   onChanged: (bool? value) {
                     setState(() {
                       if (value == true) {
                         if (_tempSelectedItems.contains("Terdekat")) _tempSelectedItems.clear();
-                        _tempSelectedItems.add(item);
+                        if (!_tempSelectedItems.contains(item)) {
+                          _tempSelectedItems.add(item);
+                        }
+                        if (widget.filterType == 'Lokasi' &&
+                            jabodetabekSourceItems.isNotEmpty &&
+                            jabodetabekSourceItems.every((it) => _tempSelectedItems.contains(it))) {
+                          if (!_tempSelectedItems.contains('Jabodetabek')) {
+                            _tempSelectedItems.add('Jabodetabek');
+                          }
+                        }
                       } else {
+                        if (widget.filterType == 'Lokasi' && _tempSelectedItems.contains('Jabodetabek')) {
+                          _tempSelectedItems.remove('Jabodetabek');
+                          for (final jabItem in jabodetabekSourceItems) {
+                            if (jabItem != item && !_tempSelectedItems.contains(jabItem)) {
+                              _tempSelectedItems.add(jabItem);
+                            }
+                          }
+                        }
                         _tempSelectedItems.remove(item);
                       }
                     });

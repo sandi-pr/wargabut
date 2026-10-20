@@ -53,6 +53,7 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
   bool _isAdmin = false;
   bool _editMode = false;
   bool _isExpanded = false;
+  bool _isReordering = false;
 
   final _eventNameController = TextEditingController();
   final _dateEventController = TextEditingController();
@@ -206,6 +207,30 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
           doc.data() != null &&
           (doc.data() as Map<String, dynamic>).containsKey('posters')) {
         isImage = true;
+
+        // Sort posters by order before saving
+        List<dynamic> posters = List.from((doc.data() as Map<String, dynamic>)['posters'] ?? []);
+        if (posters.isNotEmpty) {
+          // Normalize order jika perlu
+          bool needsNormalization = posters.every((p) => p['order'] == null || p['order'] == 1);
+          if (needsNormalization) {
+            for (int i = 0; i < posters.length; i++) {
+              posters[i]['order'] = i;
+            }
+          }
+
+          // Sort berdasarkan order
+          posters.sort((a, b) {
+            final orderA = (a['order'] as num?) ?? 0;
+            final orderB = (b['order'] as num?) ?? 0;
+            return orderA.compareTo(orderB);
+          });
+
+          // Update dengan posters yang sudah diurutkan
+          await firestore.collection('dfestkonser').doc(documentId).update({
+            'posters': posters,
+          });
+        }
       }
 
       if (isImage || _eventData!['is_postered'] == true) {
@@ -419,7 +444,7 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
     }
   }
 
-  Future<void> setMainPoster(int index) async {
+  Future<void> setMainPoster(dynamic target) async {
     try {
       final firestore = FirebaseFirestore.instance;
       DocumentReference docRef =
@@ -427,15 +452,26 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
       DocumentSnapshot doc = await docRef.get();
 
       if (doc.exists) {
-        List<dynamic> posters = List.from(doc['posters']);
+        List<dynamic> posters = List.from(doc['posters'] ?? []);
 
         // Set semua poster ke "is_main: false"
         for (var poster in posters) {
           poster['is_main'] = false;
         }
 
-        // Set poster yang dipilih sebagai utama
-        posters[index]['is_main'] = true;
+        if (target is Map<String, dynamic>) {
+          final targetPath = target['path']?.toString();
+          final targetUrl = target['url']?.toString();
+          for (var poster in posters) {
+            if ((targetPath != null && poster['path'] == targetPath) ||
+                (targetUrl != null && poster['url'] == targetUrl)) {
+              poster['is_main'] = true;
+              break;
+            }
+          }
+        } else if (target is int && target >= 0 && target < posters.length) {
+          posters[target]['is_main'] = true;
+        }
 
         // Update Firestore
         await docRef.update({'posters': posters});
@@ -443,6 +479,38 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
     } catch (e) {
       print('Error setting main poster: $e');
     }
+  }
+
+  Future<void> _deletePoster(Map<String, dynamic> targetPoster) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Poster'),
+        content: const Text('Apakah Anda yakin ingin menghapus poster ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    await _storageService.deletePoster(
+      context,
+      -1,
+      'dfestkonser',
+      _eventData!['id'],
+      targetPoster: targetPoster,
+    );
   }
 
   Future<List<Map<String, String>>> fetchPosters(String eventId) async {
@@ -457,7 +525,34 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
       // print("Snapshot data: ${snapshot.data()}");
 
       var data = snapshot.data() as Map<String, dynamic>;
-      List<dynamic> posters = data['posters'] ?? [];
+      List<dynamic> posters = List.from(data['posters'] ?? []);
+
+      // Handle legacy data & sort by order
+      if (posters.isNotEmpty) {
+        // Normalize order jika perlu
+        bool needsNormalization = posters.every((p) => p['order'] == null || p['order'] == 1);
+        if (needsNormalization) {
+          for (int i = 0; i < posters.length; i++) {
+            posters[i]['order'] = i;
+          }
+          // Auto-save normalized order
+          try {
+            await FirebaseFirestore.instance
+                .collection('dfestkonser')
+                .doc(eventId)
+                .update({'posters': posters});
+          } catch (e) {
+            print('Error auto-saving normalized order: $e');
+          }
+        }
+
+        // Sort berdasarkan order
+        posters.sort((a, b) {
+          final orderA = (a['order'] as num?) ?? 0;
+          final orderB = (b['order'] as num?) ?? 0;
+          return orderA.compareTo(orderB);
+        });
+      }
 
       Future<String> getDownloadUrl(String path) async {
         final ref = FirebaseStorage.instance.ref().child(path);
@@ -1245,10 +1340,26 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ElevatedButton.icon(
-          onPressed: _uploadImages,
-          icon: const Icon(Icons.image),
-          label: const Text('Tambah Poster Baru'),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _uploadImages,
+                icon: const Icon(Icons.add_photo_alternate),
+                label: const Text('Tambah Poster Baru'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () => setState(() => _isReordering = !_isReordering),
+              icon: Icon(_isReordering ? Icons.check : Icons.reorder),
+              tooltip: _isReordering ? 'Selesai Reorder' : 'Ubah Urutan Poster',
+              style: IconButton.styleFrom(
+                backgroundColor: _isReordering ? Colors.green : null,
+                foregroundColor: _isReordering ? Colors.white : null,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16.0),
         const Text("Daftar Poster Saat Ini:", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1273,84 +1384,557 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
 
             // Ambil daftar poster dari dokumen
             final data = snapshot.data!.data() as Map<String, dynamic>;
-            final List<dynamic> posters = data['posters'] ?? [];
+            List<dynamic> postersData = List.from(data['posters'] ?? []);
 
-            if (posters.isEmpty) {
+            // Handle legacy data: jika semua order = 1 atau tidak ada order, normalize berdasarkan index
+            bool needsNormalization = postersData.isEmpty ||
+                postersData.every((p) => p['order'] == null || p['order'] == 1);
+
+            if (needsNormalization && postersData.isNotEmpty) {
+              // Normalize order berdasarkan array index (mulai dari 0)
+              for (int i = 0; i < postersData.length; i++) {
+                postersData[i]['order'] = i;
+              }
+              // Auto-save normalized order
+              _savePosterOrder(postersData);
+            }
+
+            if (postersData.isEmpty) {
               return const Center(child: Text('Belum ada poster.'));
             }
 
-            // Bangun daftar poster menggunakan ListView.builder
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: posters.length,
-              itemBuilder: (context, index) {
-                final poster = posters[index];
+            if (_isReordering) {
+              return _buildReorderablePosterList(postersData);
+            }
 
-                return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 5,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Gambar Poster
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          poster['url'], // Asumsi ada field 'url'
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
-                          // Tambahkan error builder untuk gambar
-                          errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.broken_image, size: 100),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Nama File
-                      Expanded(
-                        child: Text(
-                          poster['path'].split('/').last, // Ambil nama file dari path
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                        ),
-                      ),
-                      // Tombol Aksi (Jadikan Utama & Hapus)
-                      IconButton(
-                        tooltip: "Jadikan poster utama",
-                        icon: Icon(
-                          poster['is_main'] == true ? Icons.star : Icons.star_border,
-                          color: poster['is_main'] == true ? Colors.amber : Colors.grey,
-                        ),
-                        onPressed: () => setMainPoster(index), // Memanggil fungsi yang sudah ada
-                      ),
-                      IconButton(
-                        tooltip: "Hapus poster",
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          // Memanggil fungsi yang sudah ada
-                          _storageService.deletePoster(context, index, 'dkonser', _eventData!['id']);
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
+            return _buildPosterListView(postersData);
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildPosterListView(List<dynamic> postersData) {
+    // Sort berdasarkan order
+    final sortedPosters = List<Map<String, dynamic>>.from(postersData.cast());
+    sortedPosters.sort((a, b) {
+      final orderA = (a['order'] as num?) ?? 0;
+      final orderB = (b['order'] as num?) ?? 0;
+      return orderA.compareTo(orderB);
+    });
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: sortedPosters.length,
+      itemBuilder: (context, i) {
+        final poster = sortedPosters[i];
+        final isMain = poster['is_main'] == true;
+        final order = (poster['order'] as num?)?.toInt() ?? i;
+        final title = poster['title']?.toString() ?? poster['path'].toString().split('/').last;
+        final posterUrl = poster['url']?.toString() ?? '';
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            leading: GestureDetector(
+              onTap: posterUrl.isNotEmpty ? () => _showPosterPreview(posterUrl, title) : null,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      posterUrl,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 60,
+                        height: 60,
+                        color: Colors.grey.shade300,
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    ),
+                  ),
+                  if (isMain)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.amber,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.star, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  if (posterUrl.isNotEmpty)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(8),
+                          ),
+                        ),
+                        child: const Icon(Icons.zoom_in, size: 12, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            title: Text(
+              '#${order + 1} - $title',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: isMain
+                ? const Text('Poster Utama', style: TextStyle(color: Colors.amber))
+                : Text('Order: ${order + 1}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                  tooltip: 'Edit Nama Poster',
+                  onPressed: () => _editPosterTitle(poster),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.star_outline, color: Colors.amber),
+                  tooltip: 'Jadikan Poster Utama',
+                  onPressed: () => setMainPoster(poster),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: 'Hapus Poster',
+                  onPressed: () => _deletePoster(poster),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReorderablePosterList(List<dynamic> postersData) {
+    // Sort berdasarkan order untuk tampilan
+    final sortedPosters = List<Map<String, dynamic>>.from(postersData.cast());
+    sortedPosters.sort((a, b) {
+      final orderA = (a['order'] as num?) ?? 0;
+      final orderB = (b['order'] as num?) ?? 0;
+      return orderA.compareTo(orderB);
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.drag_indicator, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Seret poster untuk mengubah urutan.',
+                  style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: sortedPosters.length,
+          onReorder: (oldIndex, newIndex) => _onPosterReorder(sortedPosters, oldIndex, newIndex),
+          itemBuilder: (_, i) {
+            final poster = sortedPosters[i];
+            final isMain = poster['is_main'] == true;
+            final title = poster['title']?.toString() ?? poster['path'].toString().split('/').last;
+            final posterUrl = poster['url']?.toString() ?? '';
+
+            return Card(
+              key: ValueKey(poster['path'] ?? i),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReorderableDragStartListener(
+                      index: i,
+                      child: const Icon(Icons.drag_handle, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: posterUrl.isNotEmpty ? () => _showPosterPreview(posterUrl, title) : null,
+                      child: Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              posterUrl,
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 50,
+                                height: 50,
+                                color: Colors.grey.shade300,
+                                child: const Icon(Icons.broken_image, size: 20),
+                              ),
+                            ),
+                          ),
+                          if (posterUrl.isNotEmpty)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(4),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                ),
+                                child: const Icon(Icons.zoom_in, size: 10, color: Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                title: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isMain ? Colors.amber : Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '#${i + 1}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isMain ? Colors.white : Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    if (isMain) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.star, size: 16, color: Colors.amber),
+                      const SizedBox(width: 2),
+                      const Text('Utama', style: TextStyle(fontSize: 12, color: Colors.amber)),
+                    ],
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20, color: Colors.blue),
+                      tooltip: 'Edit Nama Poster',
+                      onPressed: () => _editPosterTitle(poster),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.arrow_upward, size: 20),
+                      tooltip: 'Pindah ke Atas',
+                      onPressed: i > 0 ? () => _movePosterUp(sortedPosters, i) : null,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.arrow_downward, size: 20),
+                      tooltip: 'Pindah ke Bawah',
+                      onPressed: i < sortedPosters.length - 1 ? () => _movePosterDown(sortedPosters, i) : null,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        isMain ? Icons.star : Icons.star_outline,
+                        color: Colors.amber,
+                      ),
+                      tooltip: isMain ? 'Sudah Poster Utama' : 'Jadikan Poster Utama',
+                      onPressed: () => setMainPoster(poster),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() => _isReordering = false),
+            icon: const Icon(Icons.check),
+            label: const Text('Selesai'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.green,
+              side: const BorderSide(color: Colors.green),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onPosterReorder(List<Map<String, dynamic>> sortedPosters, int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    final item = sortedPosters.removeAt(oldIndex);
+    sortedPosters.insert(newIndex, item);
+
+    // Update order berdasarkan posisi baru
+    for (int i = 0; i < sortedPosters.length; i++) {
+      sortedPosters[i]['order'] = i;
+    }
+
+    await _savePosterOrder(sortedPosters);
+  }
+
+  void _movePosterUp(List<Map<String, dynamic>> sortedPosters, int currentIndex) async {
+    if (currentIndex > 0) {
+      final item = sortedPosters.removeAt(currentIndex);
+      sortedPosters.insert(currentIndex - 1, item);
+
+      // Update order
+      for (int i = 0; i < sortedPosters.length; i++) {
+        sortedPosters[i]['order'] = i;
+      }
+
+      await _savePosterOrder(sortedPosters);
+    }
+  }
+
+  void _movePosterDown(List<Map<String, dynamic>> sortedPosters, int currentIndex) async {
+    if (currentIndex < sortedPosters.length - 1) {
+      final item = sortedPosters.removeAt(currentIndex);
+      sortedPosters.insert(currentIndex + 1, item);
+
+      // Update order
+      for (int i = 0; i < sortedPosters.length; i++) {
+        sortedPosters[i]['order'] = i;
+      }
+
+      await _savePosterOrder(sortedPosters);
+    }
+  }
+
+  Future<void> _savePosterOrder(List<dynamic> posters) async {
+    try {
+      final String documentId = _eventData!['id'];
+      await FirebaseFirestore.instance
+          .collection('dfestkonser')
+          .doc(documentId)
+          .update({
+        'posters': posters,
+      });
+
+      // Refresh poster list
+      loadPosters();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Urutan poster berhasil disimpan!'), duration: Duration(seconds: 1)),
+        );
+      }
+    } catch (e) {
+      print('Error saving poster order: $e');
+    }
+  }
+
+  Future<void> _editPosterTitle(Map<String, dynamic> targetPoster) async {
+    final controller = TextEditingController(
+      text: targetPoster['title']?.toString() ?? targetPoster['path'].toString().split('/').last,
+    );
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Nama Poster'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Nama Poster',
+            hintText: 'Contoh: Poster Depan, Poster Belakang',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await _savePosterTitle(targetPoster, result);
+    }
+  }
+
+  Future<void> _savePosterTitle(Map<String, dynamic> targetPoster, String newTitle) async {
+    try {
+      final String documentId = _eventData!['id'];
+      final doc = await FirebaseFirestore.instance
+          .collection('dfestkonser')
+          .doc(documentId)
+          .get();
+
+      if (doc.exists) {
+        List<Map<String, dynamic>> posters = List.from(doc['posters']).cast<Map<String, dynamic>>();
+
+        final targetPath = targetPoster['path']?.toString();
+        final targetUrl = targetPoster['url']?.toString();
+
+        // Update title poster yang dipilih
+        for (var item in posters) {
+          if ((targetPath != null && item['path'] == targetPath) ||
+              (targetUrl != null && item['url'] == targetUrl)) {
+            item['title'] = newTitle;
+            break;
+          }
+        }
+
+        await FirebaseFirestore.instance
+            .collection('dfestkonser')
+            .doc(documentId)
+            .update({'posters': posters});
+
+        // Refresh poster list
+        loadPosters();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Nama poster diubah menjadi "$newTitle"')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error saving poster title: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal mengubah nama poster')),
+        );
+      }
+    }
+  }
+
+  void _showPosterPreview(String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header dengan judul dan tombol close
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
+            ),
+            // Gambar preview dengan zoom
+            Flexible(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                            SizedBox(height: 8),
+                            Text('Gagal memuat gambar', style: TextStyle(color: Colors.white54)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1501,11 +2085,21 @@ class _KonserDetailPageState extends State<KonserDetailPage> {
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 4.0),
                     child: ListTile(
-                      leading: getAgencyIcon(step["agency"]),
-                      title: Text(step["navigationInstruction"] != null ? formatNavigationInstruction(step["navigationInstruction"], step["agency"], step["codeLine"]) : "Instruksi tidak tersedia"),
+                      leading: step["type"] == "WALK"
+                          ? const Icon(Icons.directions_walk, color: Colors.orange)
+                          : getAgencyIcon(step["agency"]),
+                      title: Text(
+                        step["type"] == "WALK"
+                            ? (step["title"] ?? "Jalan kaki")
+                            : (step["navigationInstruction"] != null
+                                ? formatNavigationInstruction(step["navigationInstruction"], step["agency"], step["codeLine"])
+                                : "Instruksi tidak tersedia"),
+                      ),
                       subtitle: Text(
-                        "${step["departure"]} (${step["departureTime"]}) → ${step["arrival"]} (${step["arrivalTime"]})\n"
-                            "${_buildRouteLabel(step)} | ${step["stopCount"] ?? '0'} pemberhentian",
+                        step["type"] == "WALK"
+                            ? "Jarak: ${step["distance"] ?? '-'} • Estimasi: ${step["duration"] ?? '-'}"
+                            : "${step["departure"]} (${step["departureTime"]}) → ${step["arrival"]} (${step["arrivalTime"]})\n"
+                                "${_buildRouteLabel(step)} | ${step["stopCount"] ?? '0'} pemberhentian",
                       ),
                     ),
                   );

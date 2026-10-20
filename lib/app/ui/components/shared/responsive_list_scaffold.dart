@@ -93,7 +93,15 @@ class ResponsiveListScaffold extends StatelessWidget {
                     icon: const Icon(Icons.clear),
                     onPressed: onClearSearch,
                   )
-                else
+                else ...[
+                  if (authProvider.isAdmin)
+                    Tooltip(
+                      message: 'Tanya Wargabut ✨ (Admin Dev)',
+                      child: IconButton(
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        onPressed: () => context.push('/tanya-maps'),
+                      ),
+                    ),
                   Tooltip(
                     message: 'Ubah tema',
                     child: IconButton(
@@ -102,7 +110,8 @@ class ResponsiveListScaffold extends StatelessWidget {
                       icon: const Icon(Icons.wb_sunny_outlined),
                       selectedIcon: const Icon(Icons.brightness_2_outlined),
                     ),
-                  )
+                  ),
+                ],
               ],
             ),
           ),

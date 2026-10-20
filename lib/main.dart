@@ -1,4 +1,4 @@
-import 'package:firebase_ui_auth/firebase_ui_auth.dart' hide AuthProvider;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
@@ -16,30 +16,52 @@ import 'package:wargabut/app/ui/screens/chat/gemini_firebase.dart';
 import 'package:wargabut/app/ui/screens/create/create_ani_news.dart';
 import 'package:wargabut/app/ui/screens/create/create_event.dart';
 import 'package:wargabut/app/ui/screens/detail/event_detail.dart';
+import 'package:wargabut/app/ui/screens/admin/storage_cleanup_page.dart';
 import 'package:wargabut/app/ui/screens/list/aninews_list_page.dart';
 import 'package:wargabut/app/ui/screens/list/event_list_page.dart';
 import 'package:wargabut/app/ui/screens/home/welcome.dart';
 import 'package:wargabut/theme.dart';
+import 'app/ui/screens/tanya_maps/tanya_maps_page.dart';
 import 'app/provider/location_provider.dart';
 import 'app/provider/theme_provider.dart';
 import 'app/provider/transit_provider.dart';
-import 'app/ui/screens/chat/chat_bot.dart';
+import 'app/provider/community_provider.dart';
+import 'app/provider/profile_provider.dart';
+import 'app/provider/companion_provider.dart';
+import 'app/models/community_model.dart';
+import 'app/ui/screens/auth/custom_auth_page.dart';
+import 'app/ui/screens/community/community_list_page.dart';
+import 'app/ui/screens/community/create_community_page.dart';
+import 'app/ui/screens/community/community_detail_page.dart';
+import 'app/ui/screens/community/community_manage_page.dart';
+import 'app/ui/screens/profile/edit_profile_biodata_page.dart';
+import 'app/ui/screens/profile/member_profile_page.dart';
+import 'app/ui/screens/admin/admin_community_verification_page.dart';
 import 'app/ui/screens/create/create_festival.dart';
 import 'app/ui/screens/detail/ani_news_detail.dart';
 import 'app/ui/screens/detail/konser_detail.dart';
 import 'app/ui/screens/list/konser_list_page.dart';
+import 'app/provider/cosplay_project_provider.dart';
+import 'app/models/cosplay_project_model.dart';
+import 'app/ui/screens/cosplay_project/cosplay_project_list_page.dart';
+import 'app/ui/screens/cosplay_project/cosplay_project_detail_page.dart';
+import 'app/ui/screens/cosplay_project/create_cosplay_project_page.dart';
+import 'app/ui/screens/wear/connect_wear_page.dart';
 import 'firebase_options.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
-import 'package:firebase_performance/firebase_performance.dart';
 
 // --- PUSAT KONFIGURASI APLIKASI ---
 
 void main() async {
   // 1. Inisialisasi dasar
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: ".env", isOptional: true);
+  } catch (e) {
+    debugPrint("Failed to load .env: $e");
+  }
   usePathUrlStrategy(); // Menghilangkan # dari URL web
 
   // 2. Inisialisasi Firebase & service lain
@@ -95,14 +117,7 @@ void main() async {
       ),
       GoRoute(
         path: '/login',
-        builder: (context, state) => SignInScreen(
-          showAuthActionSwitch: false,
-          providers: [EmailAuthProvider()],
-          actions: [
-            AuthStateChangeAction<SignedIn>((context, state) => context.go('/jeventku')),
-            AuthStateChangeAction<UserCreated>((context, state) => context.go('/jeventku')),
-          ],
-        ),
+        builder: (context, state) => const CustomAuthPage(),
       ),
       GoRoute(
         path: '/jeventku',
@@ -174,8 +189,128 @@ void main() async {
         },
       ),
       GoRoute(
+        path: '/dcosplay',
+        builder: (context, state) => const CosplayProjectListPage(),
+      ),
+      GoRoute(
+        path: '/dcosplay/baru',
+        builder: (context, state) => const CreateCosplayProjectPage(),
+        redirect: (context, state) {
+          if (!authProvider.isLoggedIn) return '/login?from=${state.matchedLocation}';
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/dcosplay/:projectId',
+        builder: (context, state) {
+          final projectId = state.pathParameters['projectId']!;
+          return CosplayProjectDetailPage(projectId: projectId);
+        },
+      ),
+      GoRoute(
+        path: '/dcosplay/:projectId/edit',
+        builder: (context, state) {
+          final projectId = state.pathParameters['projectId']!;
+          final project = state.extra as CosplayProjectModel?;
+          return CreateCosplayProjectPage(projectId: projectId, projectToEdit: project);
+        },
+        redirect: (context, state) {
+          if (!authProvider.isLoggedIn) return '/login?from=${state.matchedLocation}';
+          return null;
+        },
+      ),
+      GoRoute(
         path: '/wguide',
         builder: (context, state) => const WGuidePage(),
+      ),
+      GoRoute(
+        path: '/tanya-maps',
+        builder: (context, state) => const TanyaMapsPage(),
+        redirect: (context, state) {
+          if (!authProvider.isAdmin) {
+            return '/jeventku';
+          }
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/admin/storage',
+        builder: (context, state) => const StorageCleanupPage(),
+        redirect: (context, state) {
+          if (!authProvider.isAdmin) {
+            return '/jeventku';
+          }
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/komunitas',
+        builder: (context, state) => const CommunityListPage(),
+      ),
+      GoRoute(
+        path: '/komunitas/baru',
+        builder: (context, state) => const CreateCommunityPage(),
+        redirect: (context, state) {
+          if (!authProvider.isLoggedIn) return '/login?from=${state.matchedLocation}';
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/komunitas/:slug',
+        builder: (context, state) {
+          final slug = state.pathParameters['slug']!;
+          return CommunityDetailPage(slug: slug);
+        },
+      ),
+      GoRoute(
+        path: '/komunitas/:slug/kelola',
+        builder: (context, state) {
+          final slug = state.pathParameters['slug']!;
+          return CommunityManagePage(slug: slug);
+        },
+        redirect: (context, state) {
+          if (!authProvider.isLoggedIn) return '/login?from=${state.matchedLocation}';
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/komunitas/:slug/edit',
+        builder: (context, state) {
+          final slug = state.pathParameters['slug']!;
+          final community = state.extra as CommunityModel?;
+          return CreateCommunityPage(communityToEdit: community, communitySlug: slug);
+        },
+        redirect: (context, state) {
+          if (!authProvider.isLoggedIn) return '/login?from=${state.matchedLocation}';
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/wear',
+        builder: (context, state) => const ConnectWearPage(),
+      ),
+      GoRoute(
+        path: '/@me',
+        builder: (context, state) => const EditProfileBiodataPage(),
+        redirect: (context, state) {
+          if (!authProvider.isLoggedIn) return '/login?from=/@me';
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/admin/komunitas',
+        builder: (context, state) => const AdminCommunityVerificationPage(),
+        redirect: (context, state) {
+          if (!authProvider.isAdmin) return '/komunitas';
+          return null;
+        },
+      ),
+      GoRoute(
+        path: '/@:username',
+        builder: (context, state) {
+          final username = state.pathParameters['username']!;
+          return MemberProfilePage(username: username);
+        },
       ),
     ],
     errorBuilder: (context, state) => const Scaffold(
@@ -196,6 +331,10 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => TransitProvider()),
+        ChangeNotifierProvider(create: (_) => CommunityProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+        ChangeNotifierProvider(create: (_) => CompanionProvider()),
+        ChangeNotifierProvider(create: (_) => CosplayProjectProvider()),
       ],
       child: MyApp(router: router, initialRoute: '',),
     ),
@@ -220,7 +359,7 @@ Future<String> _getInitialRoute() async {
   }
 
   // 🔹 Hitung selisih hari
-  DateTime lastVisitDate = DateFormat('yyyy-MM-dd').parse(lastVisit!);
+  DateTime lastVisitDate = DateFormat('yyyy-MM-dd').parse(lastVisit);
   int daysDiff = now.difference(lastVisitDate).inDays;
 
   // 🔹 Jika lebih dari 7 hari → tampilkan welcome lagi dan update tanggal

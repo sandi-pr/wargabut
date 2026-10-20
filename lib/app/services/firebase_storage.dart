@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:localstorage/localstorage.dart';
@@ -140,30 +141,75 @@ class StorageService {
     }
   }
 
-  Future<void> deletePoster(BuildContext context, int index, String menu, String eventId) async {
+  Future<void> deletePoster(
+    BuildContext context,
+    int index,
+    String menu,
+    String eventId, {
+    Map<String, dynamic>? targetPoster,
+  }) async {
     try {
-      final eventProvider = Provider.of<EventProvider>(context, listen: false);
       final FirebaseFirestore firestore = FirebaseFirestore.instance;
       final String documentId = eventId;
       DocumentSnapshot doc = await firestore.collection(menu).doc(documentId).get();
 
       if (doc.exists) {
-        List<dynamic> posters = List.from(doc['posters']);
-        Map<String, dynamic> removedPoster = posters.removeAt(index);
+        List<dynamic> posters = List.from(doc['posters'] ?? []);
+        Map<String, dynamic>? removedPoster;
 
-        // Hapus file dari Firebase Storage
-        Reference ref = _storage.ref().child(removedPoster['path']);
-        await ref.delete();
+        // 1. Prioritaskan pencarian berdasarkan targetPoster (path atau url)
+        if (targetPoster != null) {
+          final targetPath = targetPoster['path']?.toString();
+          final targetUrl = targetPoster['url']?.toString();
+          final idx = posters.indexWhere((item) =>
+              (targetPath != null && item['path'] == targetPath) ||
+              (targetUrl != null && item['url'] == targetUrl));
+          if (idx != -1) {
+            removedPoster = Map<String, dynamic>.from(posters.removeAt(idx));
+          }
+        }
 
-        // Jika poster yang dihapus adalah utama, set poster lain sebagai utama
-        if (removedPoster['is_main'] && posters.isNotEmpty) {
+        // 2. Fallback menggunakan index jika valid
+        if (removedPoster == null && index >= 0 && index < posters.length) {
+          removedPoster = Map<String, dynamic>.from(posters.removeAt(index));
+        }
+
+        if (removedPoster == null) {
+          print('Poster to delete not found in document (index: $index, target: $targetPoster)');
+          return;
+        }
+
+        // Hapus file dari Firebase Storage jika ada path valid
+        try {
+          final path = removedPoster['path']?.toString();
+          if (path != null && path.isNotEmpty && !path.startsWith('http')) {
+            Reference ref = _storage.ref().child(path);
+            await ref.delete();
+          }
+        } catch (e) {
+          print('Storage file delete error (non-critical): $e');
+        }
+
+        // Jika poster yang dihapus adalah utama, set poster pertama yang tersisa sebagai utama
+        if (removedPoster['is_main'] == true && posters.isNotEmpty) {
           posters.first['is_main'] = true;
+        }
+
+        // Re-normalize order setelah penghapusan
+        for (int i = 0; i < posters.length; i++) {
+          posters[i]['order'] = i;
         }
 
         await firestore.collection(menu).doc(documentId).update({
           'posters': posters,
           'is_postered': posters.isNotEmpty,
         });
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Poster berhasil dihapus')),
+          );
+        }
       }
     } catch (e) {
       print('Error deleting poster: $e');

@@ -293,7 +293,33 @@ class _AniNewsListPageState extends State<AniNewsListPage> {
 
             onSelectionChanged: (val) => _handleFilterChange(val, context),
           ),
-          const SizedBox(height: 8.0),
+          if (newsProvider.isFilterActive && isShowingScheduled)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text('Urutkan:', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline)),
+                  const SizedBox(width: 6),
+                  ActionChip(
+                    avatar: Icon(
+                      newsProvider.sortScheduledBy == 'popular' ? Icons.person : Icons.calendar_today,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    label: Text(
+                      newsProvider.sortScheduledBy == 'popular' ? 'Paling Populer' : 'Tanggal Terdekat',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: () {
+                      final next = newsProvider.sortScheduledBy == 'popular' ? 'date' : 'popular';
+                      context.read<AniNewsProvider>().setSortScheduledBy(next);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6.0),
 
           Expanded(
             child: !newsProvider.isFilterActive

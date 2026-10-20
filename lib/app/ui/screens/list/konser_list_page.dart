@@ -9,7 +9,6 @@ import 'package:wargabut/app/ui/components/tile/konser_list_tile.dart';
 import '../../../provider/auth_provider.dart';
 import '../../../provider/konser_provider.dart';
 import '../../../provider/location_provider.dart';
-import '../../components/tile/event_list_tile.dart';
 
 // Shared Components Baru
 import '../../components/shared/list_page_config.dart';
@@ -116,7 +115,7 @@ class _KonserListPageState extends State<KonserListPage> {
             // title: Text('Filter $type'), // <--- HAPUS INI agar tidak dobel
               content: SizedBox(
                   width: 400,
-                  height: 400,
+                  height: 480,
                   child: content // content sudah mengandung Padding & Judul
               )
           )

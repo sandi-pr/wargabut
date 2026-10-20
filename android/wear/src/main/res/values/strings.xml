@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wargabut</string>
+    <string name="tile_qr_label">Wargabut ID</string>
+    <string name="tile_qr_description">Kartu pass QR dan ID Wargabut Anda</string>
+    <string name="default_username">wargabut</string>
+    <string name="default_display_name">Wargabut Member</string>
+    <string name="default_role">Cosplayer / Otaku</string>
+</resources>
